@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+from time import perf_counter
+import sys
 import uuid
 
 from rocky_relay.backends.llm import build_llm
@@ -58,6 +60,7 @@ def run_typed_turn(
         raise ValueError("Input text is required.")
 
     request_id = uuid.uuid4().hex[:12]
+    turn_start = perf_counter()
     timer = TurnTimer()
     selected_llm = llm_backend or config.llm_backend
     selected_tts = tts_backend or config.tts_backend
@@ -75,6 +78,8 @@ def run_typed_turn(
 
     with timer.measure("tts_generation_ms"):
         wav_bytes = build_tts(config, selected_tts).synthesize(spoken_text)
+
+    timer.timings_ms["total_turn_ms"] = round((perf_counter() - turn_start) * 1000, 2)
 
     output_dir = config.resolve(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -108,20 +113,30 @@ def main() -> None:
     parser.add_argument("text", nargs="?", help="Typed prompt to send through the pipeline.")
     parser.add_argument("--config", help="Path to config.json.")
     parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
-    parser.add_argument("--tts", help="Override TTS backend, e.g. silent, tone, macos_say, or piper.")
+    parser.add_argument(
+        "--tts",
+        help=(
+            "Override TTS backend, e.g. silent, tone, macos_say, piper, "
+            "rocky_xtts, rocky_xtts_cli, rocky_yourtts, or smallest_ai."
+        ),
+    )
     parser.add_argument("--persona", help="Override persona, e.g. none, rocky_basic, rocky_say.")
     parser.add_argument("--json", action="store_true", help="Print the full JSON result.")
     args = parser.parse_args()
 
     text = args.text or input("Prompt: ").strip()
     config = load_config(args.config)
-    result = run_typed_turn(
-        text,
-        config,
-        llm_backend=args.llm,
-        tts_backend=args.tts,
-        persona=args.persona,
-    )
+    try:
+        result = run_typed_turn(
+            text,
+            config,
+            llm_backend=args.llm,
+            tts_backend=args.tts,
+            persona=args.persona,
+        )
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
     if args.json:
         print(json.dumps(result.as_dict(include_audio=False), indent=2))
     else:

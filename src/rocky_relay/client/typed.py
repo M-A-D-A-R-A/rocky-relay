@@ -65,7 +65,13 @@ def main() -> None:
     parser.add_argument("text", nargs="?", help="Typed prompt.")
     parser.add_argument("--server", default="http://127.0.0.1:8765", help="Server base URL.")
     parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
-    parser.add_argument("--tts", help="Override TTS backend, e.g. silent, tone, macos_say, or piper.")
+    parser.add_argument(
+        "--tts",
+        help=(
+            "Override TTS backend, e.g. silent, tone, macos_say, piper, "
+            "rocky_xtts, rocky_xtts_cli, rocky_yourtts, or smallest_ai."
+        ),
+    )
     parser.add_argument("--persona", help="Override persona, e.g. none, rocky_basic, rocky_say.")
     parser.add_argument("--output", type=Path, help="Where to write the returned WAV.")
     parser.add_argument("--play", action="store_true", help="Play the returned WAV.")
@@ -73,13 +79,17 @@ def main() -> None:
     args = parser.parse_args()
 
     text = args.text or input("Prompt: ").strip()
-    result = send_typed_turn(
-        text,
-        args.server,
-        llm_backend=args.llm,
-        tts_backend=args.tts,
-        persona=args.persona,
-    )
+    try:
+        result = send_typed_turn(
+            text,
+            args.server,
+            llm_backend=args.llm,
+            tts_backend=args.tts,
+            persona=args.persona,
+        )
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
     output = args.output
     temp_path: Path | None = None

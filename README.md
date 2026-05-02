@@ -10,6 +10,12 @@ heavier work when needed.
 Phase 1 is Mac-first benchmarking. Before touching the Pi deployment path, this
 project should prove the latency, quality, and architecture locally.
 
+Project narrative and decision history:
+
+- [Project Journey](docs/project-journey.md)
+- [Benchmarks](BENCHMARK.md)
+- [Security Notes](docs/security.md)
+
 ## Why This Name
 
 `rocky-relay` captures the intended split:
@@ -105,11 +111,16 @@ piper
   Best for measuring what "good latency" feels like.
 
 rocky_xtts
-  Uses the local Rocky voice reference through XTTS.
-  Better character identity, slower generation.
+  Fastest cloned-voice path.
+  Talks directly to the already-running Rocky XTTS HTTP server.
+
+rocky_xtts_cli
+  Compatibility path.
+  Calls rocky_say as a subprocess and can apply speed adjustment.
+  Slower because it adds process, temp file, and ffmpeg overhead.
 
 rocky_yourtts
-  Uses the Rocky reference through YourTTS.
+  Uses rocky_say + YourTTS.
   Worth benchmarking because the Rocky script describes it as fast and high quality.
 ```
 
@@ -402,6 +413,10 @@ Then edit:
   "tts_backend": "piper",
   "piper_bin": "piper",
   "piper_model": "models/piper/default.onnx",
+  "rocky_tts_path": "../rocky-pi/rocky/rocky_say",
+  "rocky_tts_server_url": "http://127.0.0.1:59720",
+  "rocky_tts_speed": 1.2,
+  "rocky_tts_agree_cpml": true,
   "persona": "rocky_say",
   "rocky_say_path": "vendor/rocky-say/rocky_say"
 }
@@ -423,6 +438,10 @@ TTS backends:
 - `tone`: writes a short beep WAV for transport testing; this is not speech.
 - `macos_say`: uses macOS built-in speech for real local spoken-output testing.
 - `piper`: calls the local Piper CLI and configured voice model.
+- `rocky_xtts`: direct HTTP call to the warm Rocky XTTS server.
+- `rocky_xtts_cli`: calls `rocky_say --raw -m xtts` for compatibility testing.
+- `rocky_yourtts`: calls `rocky_say --raw -m yourtts` for cloned Rocky audio.
+- `smallest_ai`: calls Smallest AI Lightning TTS using `SMALLEST_API_KEY`.
 
 Persona modes:
 
@@ -462,7 +481,87 @@ typed prompt
 ```
 
 The current scaffold supports this path with `echo` or `ollama` for LLM, and
-`silent`, `tone`, `macos_say`, or `piper` for TTS.
+`silent`, `tone`, `macos_say`, `piper`, `rocky_xtts`, `rocky_xtts_cli`,
+`rocky_yourtts`, or `smallest_ai` for TTS.
+
+## Smallest AI TTS Test
+
+Set your API key in the shell. Do not commit it:
+
+```bash
+export SMALLEST_API_KEY="..."
+```
+
+Run a quick hosted TTS benchmark:
+
+```bash
+rocky-relay-benchmark-tts \
+  --text "hello" \
+  --llm echo \
+  --persona rocky_basic \
+  --tts smallest_ai
+```
+
+Run the full typed turn:
+
+```bash
+rocky-relay-benchmark-tts \
+  --text "Reply in five words: hello friend." \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai
+```
+
+The default voice is `magnus`. To use a cloned voice, set
+`smallest_voice_id` in `config.json`.
+
+To create a Smallest AI voice clone from a short sample:
+
+```bash
+rocky-relay-smallest-clone \
+  --file outputs/rocky-smallest-sample.wav \
+  --display-name rocky-relay-test \
+  --language en \
+  --accent general
+```
+
+## Rocky Cloned Voice Test
+
+The cloned-voice backend currently uses the tested neighboring Rocky workspace:
+
+```text
+../rocky-pi/rocky/rocky_say
+```
+
+For the first warm-latency test, start Rocky's persistent XTTS server:
+
+```bash
+python3 ../rocky-pi/rocky/rocky_say --server start --agree-cpml
+```
+
+Then run one typed turn through cloned Rocky audio:
+
+```bash
+rocky-relay-turn \
+  "Reply in one short sentence: hello friend." \
+  --llm ollama \
+  --persona rocky_say \
+  --tts rocky_xtts \
+  --json
+```
+
+The generated WAV is written to `outputs/<request_id>.wav`.
+
+For comparison, the old subprocess wrapper path is still available:
+
+```bash
+rocky-relay-turn \
+  "Reply in one short sentence: hello friend." \
+  --llm ollama \
+  --persona rocky_say \
+  --tts rocky_xtts_cli \
+  --json
+```
 
 ## Next Build Target
 
