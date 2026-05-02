@@ -15,6 +15,8 @@ rocky-relay-server = "rocky_relay.server.app:main"
 rocky-relay-typed = "rocky_relay.client.typed:main"
 rocky-relay-turn = "rocky_relay.pipeline:main"
 rocky-relay-benchmark-tts = "rocky_relay.benchmark:main"
+rocky-relay-benchmark-stt = "rocky_relay.benchmark_stt:main"
+rocky-relay-make-sample-audio = "rocky_relay.sample_audio:main"
 rocky-relay-smallest-clone = "rocky_relay.smallest_clone:main"
 
 [tool.setuptools.packages.find]

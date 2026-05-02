@@ -84,6 +84,16 @@ push-to-talk
   -> play response
 ```
 
+Current audio-file flow:
+
+```text
+audio WAV
+  -> STT backend
+  -> existing LLM/persona/TTS pipeline
+  -> response WAV
+  -> latency log
+```
+
 ## Proposed Stack
 
 Mac benchmark stack:
@@ -432,6 +442,11 @@ LLM backends:
 - `echo`: no-dependency test backend.
 - `ollama`: local Ollama HTTP backend.
 
+STT backends:
+
+- `smallest_ai`: hosted Smallest AI Pulse STT.
+- `whisper_cpp`: local whisper.cpp CLI adapter for later local benchmarking.
+
 TTS backends:
 
 - `silent`: writes a short silent WAV for pipeline testing.
@@ -551,6 +566,44 @@ rocky-relay-turn \
 ```
 
 The generated WAV is written to `outputs/<request_id>.wav`.
+
+## STT / Audio-File Benchmark
+
+Use a real WAV file for STT. Good options are a recorded mic WAV, a previous
+TTS output in `outputs/`, or `outputs/rocky-direct-test.wav` if present.
+
+Optional macOS helper:
+
+```bash
+rocky-relay-make-sample-audio \
+  "hello friend" \
+  --output samples/hello-friend.wav
+```
+
+If this helper produces an empty WAV in a non-interactive shell, use a recorded
+WAV or previous TTS output instead.
+
+Benchmark STT mostly in isolation:
+
+```bash
+rocky-relay-benchmark-stt \
+  --audio outputs/rocky-direct-test.wav \
+  --stt smallest_ai \
+  --llm echo \
+  --persona none \
+  --tts silent
+```
+
+Benchmark the full audio-file path:
+
+```bash
+rocky-relay-benchmark-stt \
+  --audio outputs/rocky-direct-test.wav \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai
+```
 
 For comparison, the old subprocess wrapper path is still available:
 

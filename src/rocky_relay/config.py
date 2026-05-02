@@ -14,6 +14,11 @@ class Config:
     port: int = 8765
     log_dir: Path = Path("logs")
     output_dir: Path = Path("outputs")
+    stt_backend: str = "smallest_ai"
+    whisper_cpp_bin: str = "whisper-cli"
+    whisper_cpp_model: Path = Path("models/whisper/ggml-base.en.bin")
+    whisper_cpp_language: str = "en"
+    whisper_cpp_no_gpu: bool = True
     llm_backend: str = "echo"
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.2:1b"
@@ -31,6 +36,10 @@ class Config:
     smallest_speed: float = 1.0
     smallest_language: str = "en"
     smallest_output_format: str = "wav"
+    smallest_stt_url: str = "https://api.smallest.ai/waves/v1/pulse/get_text"
+    smallest_stt_language: str = "en"
+    smallest_stt_word_timestamps: bool = False
+    smallest_stt_diarize: bool = False
     persona: str = "none"
     rocky_say_path: Path = Path("vendor/rocky-say/rocky_say")
     max_reply_sentences: int = 2
@@ -60,6 +69,11 @@ def load_config(path: str | Path | None = None) -> Config:
         port=int(raw.get("port", Config.port)),
         log_dir=read_path("log_dir", "logs"),
         output_dir=read_path("output_dir", "outputs"),
+        stt_backend=str(raw.get("stt_backend", Config.stt_backend)),
+        whisper_cpp_bin=str(raw.get("whisper_cpp_bin", Config.whisper_cpp_bin)),
+        whisper_cpp_model=read_path("whisper_cpp_model", "models/whisper/ggml-base.en.bin"),
+        whisper_cpp_language=str(raw.get("whisper_cpp_language", Config.whisper_cpp_language)),
+        whisper_cpp_no_gpu=bool(raw.get("whisper_cpp_no_gpu", Config.whisper_cpp_no_gpu)),
         llm_backend=str(raw.get("llm_backend", Config.llm_backend)),
         ollama_url=str(raw.get("ollama_url", Config.ollama_url)),
         ollama_model=str(raw.get("ollama_model", Config.ollama_model)),
@@ -77,6 +91,12 @@ def load_config(path: str | Path | None = None) -> Config:
         smallest_speed=float(raw.get("smallest_speed", Config.smallest_speed)),
         smallest_language=str(raw.get("smallest_language", Config.smallest_language)),
         smallest_output_format=str(raw.get("smallest_output_format", Config.smallest_output_format)),
+        smallest_stt_url=str(raw.get("smallest_stt_url", Config.smallest_stt_url)),
+        smallest_stt_language=str(raw.get("smallest_stt_language", Config.smallest_stt_language)),
+        smallest_stt_word_timestamps=bool(
+            raw.get("smallest_stt_word_timestamps", Config.smallest_stt_word_timestamps)
+        ),
+        smallest_stt_diarize=bool(raw.get("smallest_stt_diarize", Config.smallest_stt_diarize)),
         persona=str(raw.get("persona", Config.persona)),
         rocky_say_path=read_path("rocky_say_path", "vendor/rocky-say/rocky_say"),
         max_reply_sentences=int(raw.get("max_reply_sentences", Config.max_reply_sentences)),

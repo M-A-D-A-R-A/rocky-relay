@@ -124,6 +124,11 @@ TTS:
 - `rocky_yourtts`: local YourTTS path through `rocky_say`.
 - `smallest_ai`: hosted Smallest AI Lightning TTS.
 
+STT:
+
+- `smallest_ai`: hosted Smallest AI Pulse STT for immediate benchmarking.
+- `whisper_cpp`: local whisper.cpp CLI adapter for later local benchmarking.
+
 ## Iteration 1: Local Rocky Clone
 
 The first cloned-voice path used the existing `rocky_say` script directly.
@@ -182,11 +187,23 @@ Latest meaningful benchmark rows:
 | Compatibility local clone | `rocky_xtts_cli` | 4721ms |
 | Local YourTTS | `rocky_yourtts` | 10184ms |
 
+Full audio-file pipeline comparison:
+
+| Pipeline | STT | LLM | TTS | Total |
+| --- | ---: | ---: | ---: | ---: |
+| Smallest STT -> Ollama -> Smallest TTS | 360ms | 624ms | 1001ms | 2044ms |
+| whisper.cpp -> Ollama -> macOS TTS | 2521ms | 764ms | 1060ms | 4441ms |
+| whisper.cpp -> Ollama -> silent TTS | 2479ms | 563ms | 4ms | 3190ms |
+| Smallest STT isolated-ish | 256-333ms | ~0ms | ~5ms | 338ms |
+| whisper.cpp STT isolated-ish | 1579ms | ~0ms | ~3ms | 1583ms |
+
 Interpretation:
 
 - `smallest_ai` is the current fast path.
 - `rocky_xtts` is viable as local quality/fun mode, not real-time mode.
 - `rocky_yourtts` is too slow in this setup.
+- `whisper_cpp` works as an offline/local fallback, but CPU mode is much slower
+  than hosted Smallest STT on the current short test WAV.
 - Hosted TTS is already fast enough to justify moving to microphone/STT
   benchmarking.
 
@@ -196,11 +213,23 @@ Use two voice modes:
 
 ```text
 fast mode:
-  Ollama/STT/persona -> smallest_ai
+  smallest_ai STT -> Ollama llama3.2:1b -> Rocky text transform -> smallest_ai TTS
 
 quality/local Rocky mode:
-  Ollama/STT/persona -> rocky_xtts
+  STT -> Ollama llama3.2:1b -> Rocky text transform -> rocky_xtts
+
+offline fallback mode:
+  whisper_cpp STT -> Ollama llama3.2:1b -> local or hosted TTS
 ```
+
+For STT, start with hosted `smallest_ai` so we can benchmark the full user
+experience quickly, then compare against local `whisper_cpp` once installed.
+
+After installing Homebrew `whisper-cli` with `ggml-base.en.bin`, local
+`whisper_cpp` worked in CPU mode. On the short Rocky test WAV, Smallest STT was
+about 256-333ms while whisper.cpp CPU was about 1580ms isolated. In full
+audio-file tests, the Smallest STT + Ollama + Smallest TTS path landed around
+2.0s total, while whisper.cpp CPU + Ollama + macOS speech landed around 4.4s.
 
 The Pi should remain thin:
 
@@ -217,10 +246,8 @@ Mac/LAN server:
 Move from typed input to real audio input:
 
 ```text
-push-to-talk
-  -> record short WAV on Mac
-  -> send WAV to server
-  -> STT
+audio WAV / push-to-talk
+  -> STT backend
   -> existing LLM/persona/TTS pipeline
   -> play response
 ```

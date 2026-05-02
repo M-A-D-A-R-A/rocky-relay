@@ -11,6 +11,7 @@ import sys
 import uuid
 
 from rocky_relay.backends.llm import build_llm
+from rocky_relay.backends.stt import build_stt
 from rocky_relay.backends.tts import build_tts
 from rocky_relay.config import Config, load_config
 from rocky_relay.logging import append_jsonl
@@ -30,6 +31,9 @@ class TurnResult:
     tts_backend: str
     llm_backend: str
     persona: str
+    input_audio_path: str | None = None
+    stt_backend: str | None = None
+    stt_metadata: dict[str, object] | None = None
 
     def as_dict(self, include_audio: bool = True) -> dict[str, object]:
         data: dict[str, object] = {
@@ -43,6 +47,12 @@ class TurnResult:
             "llm_backend": self.llm_backend,
             "persona": self.persona,
         }
+        if self.input_audio_path is not None:
+            data["input_audio_path"] = self.input_audio_path
+        if self.stt_backend is not None:
+            data["stt_backend"] = self.stt_backend
+        if self.stt_metadata is not None:
+            data["stt_metadata"] = self.stt_metadata
         if include_audio:
             data["audio_wav_base64"] = self.audio_wav_base64
         return data
@@ -60,8 +70,74 @@ def run_typed_turn(
         raise ValueError("Input text is required.")
 
     request_id = uuid.uuid4().hex[:12]
+    return _run_reply_turn(
+        text.strip(),
+        config,
+        request_id=request_id,
+        llm_backend=llm_backend,
+        tts_backend=tts_backend,
+        persona=persona,
+    )
+
+
+def run_audio_turn(
+    audio_path: str | Path,
+    config: Config,
+    *,
+    stt_backend: str | None = None,
+    llm_backend: str | None = None,
+    tts_backend: str | None = None,
+    persona: str | None = None,
+) -> TurnResult:
+    resolved_audio_path = Path(audio_path)
+    if not resolved_audio_path.is_absolute():
+        resolved_audio_path = config.resolve(resolved_audio_path)
+    if not resolved_audio_path.exists():
+        raise FileNotFoundError(f"Audio file not found: {resolved_audio_path}")
+
+    request_id = uuid.uuid4().hex[:12]
     turn_start = perf_counter()
     timer = TurnTimer()
+    selected_stt = stt_backend or config.stt_backend
+
+    with timer.measure("stt_transcription_ms"):
+        stt_result = build_stt(config, selected_stt).transcribe(resolved_audio_path)
+
+    result = _run_reply_turn(
+        stt_result.text,
+        config,
+        request_id=request_id,
+        llm_backend=llm_backend,
+        tts_backend=tts_backend,
+        persona=persona,
+        timer=timer,
+        turn_start=turn_start,
+        input_audio_path=str(resolved_audio_path),
+        stt_backend=selected_stt,
+        stt_metadata=stt_result.metadata,
+    )
+    return result
+
+
+def _run_reply_turn(
+    text: str,
+    config: Config,
+    *,
+    request_id: str,
+    llm_backend: str | None = None,
+    tts_backend: str | None = None,
+    persona: str | None = None,
+    timer: TurnTimer | None = None,
+    turn_start: float | None = None,
+    input_audio_path: str | None = None,
+    stt_backend: str | None = None,
+    stt_metadata: dict[str, object] | None = None,
+) -> TurnResult:
+    if timer is None:
+        timer = TurnTimer()
+    if turn_start is None:
+        turn_start = perf_counter()
+
     selected_llm = llm_backend or config.llm_backend
     selected_tts = tts_backend or config.tts_backend
     selected_persona = persona or config.persona
@@ -97,6 +173,9 @@ def run_typed_turn(
         tts_backend=selected_tts,
         llm_backend=selected_llm,
         persona=selected_persona,
+        input_audio_path=input_audio_path,
+        stt_backend=stt_backend,
+        stt_metadata=stt_metadata,
     )
     _log_turn(config, result)
     return result
@@ -111,7 +190,9 @@ def _log_turn(config: Config, result: TurnResult) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run one typed Rocky Relay turn locally.")
     parser.add_argument("text", nargs="?", help="Typed prompt to send through the pipeline.")
+    parser.add_argument("--audio", help="Audio file to transcribe before running the reply pipeline.")
     parser.add_argument("--config", help="Path to config.json.")
+    parser.add_argument("--stt", help="Override STT backend, e.g. smallest_ai or whisper_cpp.")
     parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
     parser.add_argument(
         "--tts",
@@ -124,16 +205,26 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="Print the full JSON result.")
     args = parser.parse_args()
 
-    text = args.text or input("Prompt: ").strip()
     config = load_config(args.config)
     try:
-        result = run_typed_turn(
-            text,
-            config,
-            llm_backend=args.llm,
-            tts_backend=args.tts,
-            persona=args.persona,
-        )
+        if args.audio:
+            result = run_audio_turn(
+                args.audio,
+                config,
+                stt_backend=args.stt,
+                llm_backend=args.llm,
+                tts_backend=args.tts,
+                persona=args.persona,
+            )
+        else:
+            text = args.text or input("Prompt: ").strip()
+            result = run_typed_turn(
+                text,
+                config,
+                llm_backend=args.llm,
+                tts_backend=args.tts,
+                persona=args.persona,
+            )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
