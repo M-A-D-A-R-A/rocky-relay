@@ -43,7 +43,12 @@ Audio turns now include:
 - `llm_full_response_ms`
 - `persona_transform_ms`
 - `tts_generation_ms`
+- `trigger_to_audio_ready_ms`
 - `total_turn_ms`
+
+`total_turn_ms` is kept as a backwards-compatible alias. The canonical metric
+for the current file-based benchmark is `trigger_to_audio_ready_ms`: benchmark
+start to response WAV written and ready to play.
 
 ## Benchmark Commands
 

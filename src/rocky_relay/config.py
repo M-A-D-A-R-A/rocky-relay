@@ -14,6 +14,12 @@ class Config:
     port: int = 8765
     log_dir: Path = Path("logs")
     output_dir: Path = Path("outputs")
+    capture_dir: Path = Path("captures")
+    ffmpeg_bin: str = "ffmpeg"
+    mac_audio_device: str = ":1"
+    mac_record_sample_rate: int = 16000
+    mac_record_channels: int = 1
+    mac_record_duration_s: float = 3.0
     stt_backend: str = "smallest_ai"
     whisper_cpp_bin: str = "whisper-cli"
     whisper_cpp_model: Path = Path("models/whisper/ggml-base.en.bin")
@@ -60,6 +66,8 @@ def load_config(path: str | Path | None = None) -> Config:
         with config_path.open("r", encoding="utf-8") as handle:
             raw = json.load(handle)
 
+    _load_dotenv(root_dir / ".env")
+
     def read_path(name: str, default: str) -> Path:
         return Path(str(raw.get(name, default)))
 
@@ -69,6 +77,16 @@ def load_config(path: str | Path | None = None) -> Config:
         port=int(raw.get("port", Config.port)),
         log_dir=read_path("log_dir", "logs"),
         output_dir=read_path("output_dir", "outputs"),
+        capture_dir=read_path("capture_dir", "captures"),
+        ffmpeg_bin=str(raw.get("ffmpeg_bin", Config.ffmpeg_bin)),
+        mac_audio_device=str(raw.get("mac_audio_device", Config.mac_audio_device)),
+        mac_record_sample_rate=int(
+            raw.get("mac_record_sample_rate", Config.mac_record_sample_rate)
+        ),
+        mac_record_channels=int(raw.get("mac_record_channels", Config.mac_record_channels)),
+        mac_record_duration_s=float(
+            raw.get("mac_record_duration_s", Config.mac_record_duration_s)
+        ),
         stt_backend=str(raw.get("stt_backend", Config.stt_backend)),
         whisper_cpp_bin=str(raw.get("whisper_cpp_bin", Config.whisper_cpp_bin)),
         whisper_cpp_model=read_path("whisper_cpp_model", "models/whisper/ggml-base.en.bin"),
@@ -115,3 +133,17 @@ def _find_config_path(path: str | Path | None) -> Path | None:
     if default.exists():
         return default.resolve()
     return None
+
+
+def _load_dotenv(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        name = name.strip()
+        value = value.strip().strip("\"'")
+        if name:
+            os.environ.setdefault(name, value)

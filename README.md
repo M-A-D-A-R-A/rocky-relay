@@ -160,6 +160,7 @@ Every turn should log:
 - LLM full-response latency.
 - Persona transform latency.
 - TTS generation latency.
+- Trigger-to-audio-ready latency.
 - Playback start latency.
 - Total trigger-to-first-audio latency.
 - Total trigger-to-finished-playback latency.
@@ -169,6 +170,15 @@ The key user-experience number is:
 ```text
 button press -> first audible response
 ```
+
+The current file-based benchmark measures:
+
+```text
+benchmark trigger -> response WAV ready to play
+```
+
+This is logged as `trigger_to_audio_ready_ms`. Playback startup and
+trigger-to-first-audible-audio come next.
 
 ## Benchmark Scenarios
 
@@ -420,6 +430,10 @@ Then edit:
   "llm_backend": "ollama",
   "ollama_url": "http://127.0.0.1:11434",
   "ollama_model": "llama3.2:1b",
+  "capture_dir": "captures",
+  "ffmpeg_bin": "ffmpeg",
+  "mac_audio_device": ":1",
+  "mac_record_duration_s": 3.0,
   "tts_backend": "piper",
   "piper_bin": "piper",
   "piper_model": "models/piper/default.onnx",
@@ -471,6 +485,13 @@ Each typed turn writes:
 ```text
 outputs/<request_id>.wav
 logs/turns.jsonl
+```
+
+Each Mac microphone turn also writes:
+
+```text
+captures/mac-mic-<timestamp>.wav
+logs/recorded_turns.jsonl
 ```
 
 Each JSONL record includes:
@@ -605,6 +626,109 @@ rocky-relay-benchmark-stt \
   --tts smallest_ai
 ```
 
+## Mac Microphone Live Test
+
+The first live input command records a short WAV from the Mac microphone using
+`ffmpeg` AVFoundation, then sends that WAV through the existing
+STT -> LLM -> persona -> TTS pipeline.
+
+If `rocky-relay-record-turn` is not found after pulling this change, refresh the
+editable install:
+
+```bash
+pip install -e .
+```
+
+List available AVFoundation devices:
+
+```bash
+rocky-relay-record-turn --list-devices
+```
+
+If macOS shows no devices or `Invalid audio device index`, grant microphone
+access to the terminal app you are running from:
+
+```text
+System Settings -> Privacy & Security -> Microphone
+```
+
+Record only, without spending STT/TTS calls:
+
+```bash
+rocky-relay-record-turn \
+  --duration 3 \
+  --device ":1" \
+  --record-only
+```
+
+Run a local/offline-ish loop after whisper.cpp is installed:
+
+```bash
+rocky-relay-record-turn \
+  --duration 3 \
+  --device ":1" \
+  --stt whisper_cpp \
+  --llm ollama \
+  --persona rocky_say \
+  --tts macos_say \
+  --play \
+  --json
+```
+
+Run the current fastest full loop:
+
+```bash
+export SMALLEST_API_KEY="..."
+
+rocky-relay-record-turn \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai \
+  --play \
+  --json
+```
+
+Instead of exporting the key every time, you can put this in ignored `.env`:
+
+```bash
+SMALLEST_API_KEY=...
+```
+
+Record once and benchmark both hosted and local STT on the same spoken prompt:
+
+```bash
+rocky-relay-benchmark-live \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --stt whisper_cpp \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai
+```
+
+To isolate STT only with the same single recording:
+
+```bash
+rocky-relay-benchmark-live \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --stt whisper_cpp \
+  --llm echo \
+  --persona none \
+  --tts silent
+```
+
+Important timing fields:
+
+- `capture_duration_ms`: fixed recording window plus ffmpeg startup.
+- `trigger_to_audio_ready_ms`: captured WAV file -> response WAV ready.
+- `trigger_to_audio_ready_with_capture_ms`: record trigger -> response WAV ready.
+
 For comparison, the old subprocess wrapper path is still available:
 
 ```bash
@@ -618,12 +742,14 @@ rocky-relay-turn \
 
 ## Next Build Target
 
-Add the first real audio input path:
+Move from fixed-duration Mac recording to true push-to-talk:
 
 ```text
 push-to-talk
-  -> record short WAV on Mac
-  -> send WAV to server
+  -> record until release
+  -> send WAV to local server endpoint
   -> transcribe
   -> reuse existing typed turn pipeline
+  -> start playback
+  -> measure trigger-to-first-audible
 ```

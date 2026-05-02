@@ -16,8 +16,10 @@ rocky-relay-typed = "rocky_relay.client.typed:main"
 rocky-relay-turn = "rocky_relay.pipeline:main"
 rocky-relay-benchmark-tts = "rocky_relay.benchmark:main"
 rocky-relay-benchmark-stt = "rocky_relay.benchmark_stt:main"
+rocky-relay-benchmark-live = "rocky_relay.benchmark_live:main"
 rocky-relay-make-sample-audio = "rocky_relay.sample_audio:main"
 rocky-relay-smallest-clone = "rocky_relay.smallest_clone:main"
+rocky-relay-record-turn = "rocky_relay.mac_record:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

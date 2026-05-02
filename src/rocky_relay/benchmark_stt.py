@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 import sys
 
+from rocky_relay.benchmark_doc import append_markdown_table_row
 from rocky_relay.config import load_config
 from rocky_relay.pipeline import run_audio_turn
 
@@ -49,11 +50,10 @@ def main() -> None:
             f"{timings.get('llm_full_response_ms', '')} | "
             f"{timings.get('persona_transform_ms', '')} | "
             f"{timings.get('tts_generation_ms', '')} | "
-            f"{timings.get('total_turn_ms', '')} | "
+            f"{timings.get('trigger_to_audio_ready_ms', timings.get('total_turn_ms', ''))} | "
             f"`{result.input_text}` | `{result.audio_path}` | benchmark command |\n"
         )
-        with benchmark_path.open("a", encoding="utf-8") as handle:
-            handle.write(row)
+        append_markdown_table_row(benchmark_path, "STT / Audio Turn:", row)
 
         print(
             f"{stt_backend}: "
@@ -61,7 +61,7 @@ def main() -> None:
             f"llm={timings.get('llm_full_response_ms')}ms "
             f"persona={timings.get('persona_transform_ms')}ms "
             f"tts={timings.get('tts_generation_ms')}ms "
-            f"total={timings.get('total_turn_ms')}ms "
+            f"audio_ready={timings.get('trigger_to_audio_ready_ms', timings.get('total_turn_ms'))}ms "
             f"transcript={result.input_text!r} "
             f"wav={result.audio_path}"
         )

@@ -155,12 +155,14 @@ def _run_reply_turn(
     with timer.measure("tts_generation_ms"):
         wav_bytes = build_tts(config, selected_tts).synthesize(spoken_text)
 
-    timer.timings_ms["total_turn_ms"] = round((perf_counter() - turn_start) * 1000, 2)
-
     output_dir = config.resolve(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     audio_path = output_dir / f"{request_id}.wav"
     audio_path.write_bytes(wav_bytes)
+    trigger_to_audio_ready_ms = round((perf_counter() - turn_start) * 1000, 2)
+    timer.timings_ms["trigger_to_audio_ready_ms"] = trigger_to_audio_ready_ms
+    # Backwards-compatible alias for older docs/log readers.
+    timer.timings_ms["total_turn_ms"] = trigger_to_audio_ready_ms
 
     result = TurnResult(
         request_id=request_id,

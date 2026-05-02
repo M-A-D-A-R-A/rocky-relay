@@ -176,7 +176,7 @@ Implemented:
 
 Latest meaningful benchmark rows:
 
-| Scenario | Backend | Total |
+| Scenario | Backend | Trigger -> Audio Ready |
 | --- | ---: | ---: |
 | TTS-only-ish `hello` | `smallest_ai` | 516ms |
 | TTS-only-ish `hello` | `macos_say` | 2746ms |
@@ -189,7 +189,7 @@ Latest meaningful benchmark rows:
 
 Full audio-file pipeline comparison:
 
-| Pipeline | STT | LLM | TTS | Total |
+| Pipeline | STT | LLM | TTS | Trigger -> Audio Ready |
 | --- | ---: | ---: | ---: | ---: |
 | Smallest STT -> Ollama -> Smallest TTS | 360ms | 624ms | 1001ms | 2044ms |
 | whisper.cpp -> Ollama -> macOS TTS | 2521ms | 764ms | 1060ms | 4441ms |
@@ -243,13 +243,71 @@ Mac/LAN server:
 
 ## Next Milestone
 
-Move from typed input to real audio input:
+The next milestone was moving from typed/audio-file input to real Mac
+microphone input. We added a fixed-duration Mac capture command first because
+it is easier to benchmark than push-to-talk and maps cleanly to the future Pi
+client.
 
 ```text
-audio WAV / push-to-talk
+Mac mic fixed-duration capture
+  -> captured WAV
   -> STT backend
   -> existing LLM/persona/TTS pipeline
   -> play response
+```
+
+Implemented command:
+
+```bash
+rocky-relay-record-turn
+```
+
+This records with `ffmpeg` AVFoundation, saves `captures/mac-mic-<timestamp>.wav`,
+runs the existing audio turn pipeline, and can play the generated response with
+`--play`.
+
+We then added a one-recording live benchmark command:
+
+```bash
+rocky-relay-benchmark-live
+```
+
+This captures the Mac microphone once, then reuses the same WAV across multiple
+STT backends so the comparison is fair.
+
+## Iteration 4: Live Mac Mic Benchmark
+
+We ran two live Mac microphone comparisons.
+
+Full loop:
+
+| STT | Transcript | STT | Trigger -> Audio Ready | Trigger -> Audio Ready With Capture |
+| --- | --- | ---: | ---: | ---: |
+| `smallest_ai` | `What are you doing?` | 379ms | 2200ms | 5744ms |
+| `whisper_cpp` | `What are you doing?` | 1783ms | 3153ms | 6697ms |
+
+STT-isolated loop:
+
+| STT | Transcript | STT | Trigger -> Audio Ready | Trigger -> Audio Ready With Capture |
+| --- | --- | ---: | ---: | ---: |
+| `smallest_ai` | `This is Nishant.` | 285ms | 297ms | 3802ms |
+| `whisper_cpp` | `This is nipping.` | 1776ms | 1782ms | 5287ms |
+
+Interpretation:
+
+- `smallest_ai` is currently the clear fast path for live interaction.
+- `smallest_ai` was also more accurate on the short mic prompt.
+- `whisper_cpp` remains useful as an offline fallback, but CPU mode costs about
+  1.4-1.5 seconds more than Smallest STT on these live captures.
+- `Trigger -> Audio Ready With Capture` includes the fixed 3-second recording
+  window and ffmpeg startup, so it is useful for current live-loop testing but
+  not yet the final user-experience metric.
+
+This gives us enough evidence to move beyond model selection and start
+measuring the real interaction boundary:
+
+```text
+trigger/button press -> first audible response
 ```
 
 The next benchmark target should measure:
@@ -261,3 +319,32 @@ The next benchmark target should measure:
 - TTS latency.
 - Total trigger-to-audio-ready latency.
 - Later: trigger-to-first-audible-audio latency.
+
+Current file-based benchmarks now log `trigger_to_audio_ready_ms`, measured from
+benchmark start to response WAV written and ready to play. This does not yet
+include playback device startup.
+
+Live Mac mic runs add `trigger_to_audio_ready_with_capture_ms`, measured from
+the start of microphone recording to response WAV ready. This includes the fixed
+recording window, so a 3-second capture will naturally add roughly 3 seconds to
+the live number.
+
+## Next Step
+
+Move from fixed-duration recording to the first real interaction loop:
+
+```text
+press/trigger
+  -> capture speech
+  -> STT
+  -> LLM
+  -> persona transform
+  -> TTS
+  -> response WAV ready
+  -> playback starts
+```
+
+The next implementation target is to measure `trigger_to_first_audible_ms`.
+That means timing local playback startup after the response WAV is ready, then
+moving toward push-to-talk capture so the benchmark reflects how the assistant
+will actually feel on the Pi.

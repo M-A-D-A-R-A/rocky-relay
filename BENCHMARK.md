@@ -11,6 +11,16 @@ runs unless otherwise noted.
 - Persona: `rocky_say` unless otherwise noted
 - Output format: WAV
 
+## Latency Definitions
+
+- `STT`: audio file -> transcript.
+- `LLM`: transcript/text -> full reply text.
+- `Persona`: reply text -> spoken/persona-shaped text.
+- `TTS`: spoken text -> generated audio bytes.
+- `Trigger -> Audio Ready`: benchmark start -> response WAV written and ready to play.
+- `Trigger -> Audio Ready With Capture`: record trigger -> mic capture -> response WAV ready.
+- `Trigger -> First Audible`: not implemented yet; this will include playback startup.
+
 ## Current Baselines
 
 | Scenario | Backend | LLM | Persona | TTS | Total | Notes |
@@ -25,7 +35,7 @@ runs unless otherwise noted.
 
 Full audio-file pipeline:
 
-| Pipeline | STT | LLM | TTS | Total |
+| Pipeline | STT | LLM | TTS | Trigger -> Audio Ready |
 | --- | ---: | ---: | ---: | ---: |
 | Smallest STT -> Ollama -> Smallest TTS | 359.86ms | 624.40ms | 1001.08ms | 2043.52ms |
 | whisper.cpp -> Ollama -> macOS TTS | 2521.38ms | 763.79ms | 1059.66ms | 4440.79ms |
@@ -35,7 +45,7 @@ Full audio-file pipeline:
 
 TTS-only comparison:
 
-| TTS Backend | Total |
+| TTS Backend | Trigger -> Audio Ready |
 | --- | ---: |
 | Smallest AI | 516.07ms |
 | macOS say | 2746.09ms |
@@ -49,7 +59,7 @@ Current fastest realistic path:
 Smallest STT -> Ollama llama3.2:1b -> Rocky text transform -> Smallest TTS
 ```
 
-This lands around 2.0s full audio-file-to-audio-file in the current benchmark,
+This lands around 2.0s full audio-file-to-audio-ready in the current benchmark,
 with earlier logs showing a best observed full Smallest/Ollama path around 1.26s.
 `whisper.cpp` works as an offline fallback, but CPU mode currently adds roughly
 1.2-2.2s over Smallest STT on the short Rocky test WAV.
@@ -150,11 +160,84 @@ rocky-relay-benchmark-stt \
   --tts smallest_ai
 ```
 
+## Mac Microphone Test Plan
+
+First list AVFoundation devices:
+
+```bash
+rocky-relay-record-turn --list-devices
+```
+
+If the device list is empty, grant microphone access to the terminal/Codex app
+in macOS System Settings and rerun the command.
+
+Record a short WAV only:
+
+```bash
+rocky-relay-record-turn \
+  --duration 3 \
+  --device ":1" \
+  --record-only
+```
+
+Run the full fast live loop:
+
+```bash
+rocky-relay-record-turn \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai \
+  --play \
+  --json
+```
+
+Record once and benchmark both STT backends against the same mic input:
+
+```bash
+rocky-relay-benchmark-live \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --stt whisper_cpp \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai
+```
+
+STT-isolated variant:
+
+```bash
+rocky-relay-benchmark-live \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --stt whisper_cpp \
+  --llm echo \
+  --persona none \
+  --tts silent
+```
+
+This prints both file-based latency and live-capture latency:
+
+- `trigger_to_audio_ready_ms`: captured WAV file -> response WAV ready.
+- `trigger_to_audio_ready_with_capture_ms`: record trigger -> response WAV ready.
+
+Current local Codex sandbox observation:
+
+```text
+ffmpeg was installed, but AVFoundation exposed no audio devices from this
+sandboxed session. Run the command from a microphone-permitted terminal for the
+real measurement.
+```
+
 ## Result Template
 
 TTS:
 
-| Date | Scenario | Backend | LLM | Persona | TTS | Total | Audio path | Notes |
+| Date | Scenario | Backend | LLM | Persona | TTS | Trigger -> Audio Ready | Audio path | Notes |
 | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- |
 | 2026-05-03 |  | `smallest_ai` |  |  |  |  | `outputs/...wav` |  |
 | 2026-05-03 | `hello` | `smallest_ai` | 0.01 | 0.55 | 570.46 | n/a | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/9438e54a0dd2.wav` | benchmark command |
@@ -171,7 +254,7 @@ TTS:
 
 STT / Audio Turn:
 
-| Date | Audio | STT Backend | STT | LLM | Persona | TTS | Total | Transcript | Audio path | Notes |
+| Date | Audio | STT Backend | STT | LLM | Persona | TTS | Trigger -> Audio Ready | Transcript | Audio path | Notes |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
 | 2026-05-03 | `outputs/rocky-direct-test.wav` | `smallest_ai` | 333.39 | 0.01 | 0.15 | 4.67 | 338.27 | `Hello friend!` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/adfce8251ffa.wav` | benchmark command |
 | 2026-05-03 | `outputs/rocky-direct-test.wav` | `smallest_ai` | 256.29 | 2083.98 | 71.2 | 1076.78 | 3488.56 | `Hello friend!` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/fed9151ccf17.wav` | benchmark command |
@@ -179,3 +262,15 @@ STT / Audio Turn:
 | 2026-05-03 | `outputs/rocky-direct-test.wav` | `whisper_cpp` | 2479.09 | 563.09 | 143.48 | 3.95 | 3189.74 | `Hello, friend!` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/62b900f27905.wav` | benchmark command |
 | 2026-05-03 | `outputs/rocky-direct-test.wav` | `whisper_cpp` | 2521.38 | 763.79 | 95.83 | 1059.66 | 4440.79 | `Hello, friend!` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/b61c35e1e466.wav` | benchmark command |
 | 2026-05-03 | `outputs/rocky-direct-test.wav` | `smallest_ai` | 359.86 | 624.4 | 58.08 | 1001.08 | 2043.52 | `Hello friend!` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/165430e9faa1.wav` | benchmark command |
+| 2026-05-03 | `outputs/rocky-direct-test.wav` | `smallest_ai` | 279.1 | 1946.03 | 83.25 | 615.57 | 2925.62 | `Hello friend!` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/49feaf2eb90f.wav` | benchmark command |
+| 2026-05-03 | `outputs/rocky-direct-test.wav` | `whisper_cpp` | 11603.61 | 628.73 | 94.73 | 895.85 | 13224.78 | `Hello, friend!` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/31d5488e1164.wav` | benchmark command |
+| 2026-05-03 | `captures/benchmark-live-20260503-041643.wav` | `whisper_cpp` | 1495.17 | 0.02 | 0.12 | 2.35 | 1497.97 | `(wind blowing)` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/bcdb78a9e958.wav` | benchmark command |
+
+Mac Mic Live Turn:
+
+| Date | Capture | STT Backend | STT | LLM | Persona | TTS | Trigger -> Audio Ready | Trigger -> Audio Ready With Capture | Transcript | Response path | Notes |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-041942.wav` | `smallest_ai` | 379.18 | 715.58 | 98.23 | 1004.89 | 2200.2 | 5743.5 | `What are you doing?` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/a69c056b0582.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-041942.wav` | `whisper_cpp` | 1783.26 | 449.74 | 94.0 | 824.4 | 3153.2 | 6696.5 | `What are you doing?` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/f6965e6a66a7.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-042007.wav` | `smallest_ai` | 285.38 | 0.01 | 0.38 | 10.31 | 296.73 | 3802.28 | `This is Nishant.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/7619cd6d86a7.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-042007.wav` | `whisper_cpp` | 1776.0 | 0.02 | 0.35 | 5.03 | 1781.88 | 5287.43 | `This is nipping.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/836ffb867224.wav` | live benchmark command |
