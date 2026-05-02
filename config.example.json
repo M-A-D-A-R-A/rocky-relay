@@ -1,0 +1,15 @@
+{
+  "host": "127.0.0.1",
+  "port": 8765,
+  "log_dir": "logs",
+  "output_dir": "outputs",
+  "llm_backend": "ollama",
+  "ollama_url": "http://127.0.0.1:11434",
+  "ollama_model": "llama3.2:1b",
+  "tts_backend": "piper",
+  "piper_bin": "piper",
+  "piper_model": "models/piper/default.onnx",
+  "persona": "rocky_say",
+  "rocky_say_path": "vendor/rocky-say/rocky_say",
+  "max_reply_sentences": 2
+}

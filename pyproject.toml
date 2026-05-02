@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rocky-relay"
+version = "0.1.0"
+description = "Mac-first low-latency STT-LLM-TTS assistant scaffold for a future Raspberry Pi client."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+rocky-relay-server = "rocky_relay.server.app:main"
+rocky-relay-typed = "rocky_relay.client.typed:main"
+rocky-relay-turn = "rocky_relay.pipeline:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

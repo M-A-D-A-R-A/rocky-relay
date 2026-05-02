@@ -1,3 +1,10 @@
+Metadata-Version: 2.4
+Name: rocky-relay
+Version: 0.1.0
+Summary: Mac-first low-latency STT-LLM-TTS assistant scaffold for a future Raspberry Pi client.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+
 # Rocky Relay
 
 Low-latency personal voice assistant experiment inspired by Rocky from
@@ -254,7 +261,7 @@ src/rocky_relay/server/
 
 src/rocky_relay/backends/
   llm.py          Echo and Ollama LLM backends.
-  tts.py          Silent, tone, macOS say, and Piper TTS backends.
+  tts.py          Silent, tone, and Piper TTS backends.
 
 src/rocky_relay/
   pipeline.py     Typed turn pipeline and JSONL latency logging.
@@ -343,36 +350,6 @@ rocky-relay-typed \
   --json
 ```
 
-Test Ollama with real macOS speech output:
-
-```bash
-rocky-relay-turn \
-  "Reply in five words: why low latency matters." \
-  --llm ollama \
-  --tts macos_say \
-  --persona rocky_say \
-  --json
-```
-
-Or through the local server:
-
-```bash
-rocky-relay-server --port 8766
-```
-
-In another terminal:
-
-```bash
-rocky-relay-typed \
-  "Reply in five words: why low latency matters." \
-  --server http://127.0.0.1:8766 \
-  --llm ollama \
-  --tts macos_say \
-  --persona rocky_say \
-  --output outputs/ollama-client-test.wav \
-  --json
-```
-
 On macOS, add `--play` to hear the returned WAV:
 
 ```bash
@@ -398,7 +375,7 @@ Then edit:
 {
   "llm_backend": "ollama",
   "ollama_url": "http://127.0.0.1:11434",
-  "ollama_model": "llama3.2:1b",
+  "ollama_model": "llama3.2:3b",
   "tts_backend": "piper",
   "piper_bin": "piper",
   "piper_model": "models/piper/default.onnx",
@@ -420,8 +397,7 @@ LLM backends:
 TTS backends:
 
 - `silent`: writes a short silent WAV for pipeline testing.
-- `tone`: writes a short beep WAV for transport testing; this is not speech.
-- `macos_say`: uses macOS built-in speech for real local spoken-output testing.
+- `tone`: writes a short beep WAV for client playback testing.
 - `piper`: calls the local Piper CLI and configured voice model.
 
 Persona modes:
@@ -462,7 +438,7 @@ typed prompt
 ```
 
 The current scaffold supports this path with `echo` or `ollama` for LLM, and
-`silent`, `tone`, `macos_say`, or `piper` for TTS.
+`silent`, `tone`, or `piper` for TTS.
 
 ## Next Build Target
 

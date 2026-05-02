@@ -1,0 +1,4 @@
+[console_scripts]
+rocky-relay-server = rocky_relay.server.app:main
+rocky-relay-turn = rocky_relay.pipeline:main
+rocky-relay-typed = rocky_relay.client.typed:main
