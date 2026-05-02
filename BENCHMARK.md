@@ -19,7 +19,8 @@ runs unless otherwise noted.
 - `TTS`: spoken text -> generated audio bytes.
 - `Trigger -> Audio Ready`: benchmark start -> response WAV written and ready to play.
 - `Trigger -> Audio Ready With Capture`: record trigger -> mic capture -> response WAV ready.
-- `Trigger -> First Audible`: not implemented yet; this will include playback startup.
+- `Playback Startup`: response WAV ready -> local playback process accepted the WAV.
+- `Trigger -> First Audible`: record trigger -> response WAV ready -> playback startup.
 
 ## Current Baselines
 
@@ -220,10 +221,24 @@ rocky-relay-benchmark-live \
   --tts silent
 ```
 
-This prints both file-based latency and live-capture latency:
+This prints file-based latency and live-capture latency:
 
 - `trigger_to_audio_ready_ms`: captured WAV file -> response WAV ready.
 - `trigger_to_audio_ready_with_capture_ms`: record trigger -> response WAV ready.
+
+Add `--play` to measure playback startup and approximate
+`trigger_to_first_audible_ms`:
+
+```bash
+rocky-relay-benchmark-live \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai \
+  --play
+```
 
 Current local Codex sandbox observation:
 
@@ -268,9 +283,12 @@ STT / Audio Turn:
 
 Mac Mic Live Turn:
 
-| Date | Capture | STT Backend | STT | LLM | Persona | TTS | Trigger -> Audio Ready | Trigger -> Audio Ready With Capture | Transcript | Response path | Notes |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
-| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-041942.wav` | `smallest_ai` | 379.18 | 715.58 | 98.23 | 1004.89 | 2200.2 | 5743.5 | `What are you doing?` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/a69c056b0582.wav` | live benchmark command |
-| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-041942.wav` | `whisper_cpp` | 1783.26 | 449.74 | 94.0 | 824.4 | 3153.2 | 6696.5 | `What are you doing?` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/f6965e6a66a7.wav` | live benchmark command |
-| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-042007.wav` | `smallest_ai` | 285.38 | 0.01 | 0.38 | 10.31 | 296.73 | 3802.28 | `This is Nishant.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/7619cd6d86a7.wav` | live benchmark command |
-| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-042007.wav` | `whisper_cpp` | 1776.0 | 0.02 | 0.35 | 5.03 | 1781.88 | 5287.43 | `This is nipping.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/836ffb867224.wav` | live benchmark command |
+| Date | Capture | STT Backend | STT | LLM | Persona | TTS | Trigger -> Audio Ready | Trigger -> Audio Ready With Capture | Playback Startup | Trigger -> First Audible | Transcript | Response path | Notes |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-041942.wav` | `smallest_ai` | 379.18 | 715.58 | 98.23 | 1004.89 | 2200.2 | 5743.5 |  |  | `What are you doing?` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/a69c056b0582.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-041942.wav` | `whisper_cpp` | 1783.26 | 449.74 | 94.0 | 824.4 | 3153.2 | 6696.5 |  |  | `What are you doing?` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/f6965e6a66a7.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-042007.wav` | `smallest_ai` | 285.38 | 0.01 | 0.38 | 10.31 | 296.73 | 3802.28 |  |  | `This is Nishant.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/7619cd6d86a7.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-042007.wav` | `whisper_cpp` | 1776.0 | 0.02 | 0.35 | 5.03 | 1781.88 | 5287.43 |  |  | `This is nipping.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/836ffb867224.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-043013.wav` | `smallest_ai` | 298.26 | 718.82 | 97.06 | 1129.56 | 2245.77 | 5775.43 | 5.37 | 5780.8 | `Project Hell Merry.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/f8291d5e44a7.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-043013.wav` | `whisper_cpp` | 1764.1 | 604.3 | 95.79 | 1150.55 | 3615.65 | 7145.31 | 2.38 | 7147.69 | `Project Hail Mary.` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/0cc842397aa5.wav` | live benchmark command |
+| 2026-05-03 | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/captures/benchmark-live-20260503-044453.wav` | `smallest_ai` | 327.72 | 1965.73 | 50.72 | 900.38 | 3246.56 | 7764.72 | 9.15 | 7773.87 | `Hello, how are you?` | `/Users/nandoriy/Documents/aiprojects/voice-lab/rocky-relay/outputs/0b0b2706b748.wav` | live benchmark command |

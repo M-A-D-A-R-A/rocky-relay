@@ -86,5 +86,7 @@ After one successful fixed-duration live run, add:
 
 - benchmark appending for live mic rows,
 - press-and-hold or enter-to-stop capture,
-- playback-start timing,
 - local server `/audio` endpoint so the Mac command mirrors the future Pi client.
+
+Playback-start timing has now been added behind `--play` as
+`playback_startup_ms` and `trigger_to_first_audible_ms`.

@@ -287,6 +287,12 @@ src/rocky_relay/backends/
   llm.py          Echo and Ollama LLM backends.
   tts.py          Silent, tone, macOS say, and Piper TTS backends.
 
+src/rocky_relay/benchmarks/
+  tts.py          TTS/typed-turn benchmark CLI.
+  stt.py          STT/audio-file benchmark CLI.
+  live.py         One-recording Mac mic benchmark CLI.
+  doc.py          BENCHMARK.md table append helper.
+
 src/rocky_relay/
   pipeline.py     Typed turn pipeline and JSONL latency logging.
   persona.py      none, rocky_basic, and rocky_say persona transforms.
@@ -477,6 +483,22 @@ Persona modes:
 - `none`: speak the LLM reply as-is.
 - `rocky_basic`: tiny built-in Rocky-ish transform for testing.
 - `rocky_say`: calls the vendored Rocky gist script in `vendor/rocky-say/`.
+- `rocky_say_llm`: experimental stronger persona mode; asks Ollama for
+  Rocky-shaped short phrasing, then calls the vendored transform as cleanup.
+
+If the audio voice sounds right but the wording feels too generic, try:
+
+```bash
+rocky-relay-record-turn \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say_llm \
+  --tts smallest_ai \
+  --play \
+  --json
+```
 
 ## Runtime Outputs
 
@@ -699,6 +721,13 @@ SMALLEST_API_KEY=...
 
 Record once and benchmark both hosted and local STT on the same spoken prompt:
 
+If this command was installed before the benchmark package cleanup, refresh the
+editable install once:
+
+```bash
+pip install -e .
+```
+
 ```bash
 rocky-relay-benchmark-live \
   --duration 3 \
@@ -708,6 +737,21 @@ rocky-relay-benchmark-live \
   --llm ollama \
   --persona rocky_say \
   --tts smallest_ai
+```
+
+Add `--play` when you want the benchmark to measure playback startup and
+`trigger_to_first_audible_ms`. This will play each generated response:
+
+```bash
+rocky-relay-benchmark-live \
+  --duration 3 \
+  --device ":1" \
+  --stt smallest_ai \
+  --stt whisper_cpp \
+  --llm ollama \
+  --persona rocky_say \
+  --tts smallest_ai \
+  --play
 ```
 
 To isolate STT only with the same single recording:
@@ -728,6 +772,11 @@ Important timing fields:
 - `capture_duration_ms`: fixed recording window plus ffmpeg startup.
 - `trigger_to_audio_ready_ms`: captured WAV file -> response WAV ready.
 - `trigger_to_audio_ready_with_capture_ms`: record trigger -> response WAV ready.
+- `playback_startup_ms`: response WAV ready -> local playback process accepted the WAV.
+- `trigger_to_first_audible_ms`: record trigger -> response WAV ready -> playback startup.
+
+`trigger_to_first_audible_ms` is currently an OS-playback-start approximation,
+not an acoustic loopback measurement from a microphone.
 
 For comparison, the old subprocess wrapper path is still available:
 

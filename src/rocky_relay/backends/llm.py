@@ -26,21 +26,17 @@ class OllamaLLM(LLMBackend):
     base_url: str
     model: str
     max_reply_sentences: int = 2
+    persona: str = "none"
     timeout_s: int = 120
 
     def reply(self, text: str) -> str:
-        prompt = (
-            "You are a concise low-latency voice assistant. "
-            f"Reply in at most {self.max_reply_sentences} short sentences.\n\n"
-            f"User: {text.strip()}\n"
-            "Assistant:"
-        )
+        prompt = self._prompt(text)
         payload = json.dumps(
             {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
-                "options": {"num_predict": 80, "temperature": 0.5},
+                "options": self._options(),
             }
         ).encode("utf-8")
         request = urllib.request.Request(
@@ -60,8 +56,46 @@ class OllamaLLM(LLMBackend):
             raise RuntimeError(f"Ollama returned no response for model {self.model!r}")
         return reply
 
+    def _prompt(self, text: str) -> str:
+        if self.persona == "rocky_say_llm":
+            return (
+                "Write the final assistant reply as text for Rocky from Project Hail Mary to speak. "
+                "Answer only the current user message. Do not copy examples. Do not explain these rules.\n"
+                "Rules:\n"
+                "- Use very short concrete sentences.\n"
+                "- Use simple broken English.\n"
+                "- Avoid polished assistant phrases like 'I'm here to help', 'please stand by', or 'as an AI'.\n"
+                "- Include useful concrete information from the answer.\n"
+                "- Do not answer only with praise or emotion words.\n"
+                "- Do not repeat filler words like question, amaze, or good.\n"
+                "- Avoid using 'amaze' unless something is truly surprising.\n"
+                "- Use normal question marks; do not write the word question.\n"
+                "- Rocky is the speaker. Do not say you help Rocky; say you help the user.\n"
+                "- Do not mention Rocky unless the user asks about Rocky.\n"
+                "- Stay useful; do not become nonsense.\n"
+                f"- Reply in at most {self.max_reply_sentences} short sentences.\n\n"
+                f"Current user message: {text.strip()}\n"
+                "Final reply:"
+            )
+        return (
+            "You are a concise low-latency voice assistant. "
+            f"Reply in at most {self.max_reply_sentences} short sentences.\n\n"
+            f"User: {text.strip()}\n"
+            "Assistant:"
+        )
 
-def build_llm(config: Config, override: str | None = None) -> LLMBackend:
+    def _options(self) -> dict[str, object]:
+        if self.persona == "rocky_say_llm":
+            return {"num_predict": 60, "temperature": 0.1}
+        return {"num_predict": 80, "temperature": 0.5}
+
+
+def build_llm(
+    config: Config,
+    override: str | None = None,
+    *,
+    persona: str = "none",
+) -> LLMBackend:
     name = override or config.llm_backend
     if name == "echo":
         return EchoLLM(max_reply_sentences=config.max_reply_sentences)
@@ -70,5 +104,6 @@ def build_llm(config: Config, override: str | None = None) -> LLMBackend:
             base_url=config.ollama_url,
             model=config.ollama_model,
             max_reply_sentences=config.max_reply_sentences,
+            persona=persona,
         )
     raise ValueError(f"Unknown LLM backend: {name}")

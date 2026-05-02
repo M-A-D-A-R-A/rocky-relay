@@ -49,6 +49,13 @@ The key lesson: Rocky style and Rocky audio should be separate layers.
 LLM reply -> Rocky text transform -> selected TTS backend
 ```
 
+Later live tests showed a tradeoff: if the LLM first writes generic assistant
+prose, the Rocky transform can only remove some grammar polish. If the LLM is
+prompted too aggressively to "think Rocky", the tiny local model can become less
+factual or too catchphrase-heavy. To keep this safe, `rocky_say` remains the
+faithful vendored transform and `rocky_say_llm` is the experimental stronger
+persona mode.
+
 ### Rocky Gist
 
 Reference:
@@ -113,6 +120,7 @@ Persona:
 - `none`: no transform.
 - `rocky_basic`: tiny built-in fallback.
 - `rocky_say`: vendored Rocky gist transform.
+- `rocky_say_llm`: Rocky-aware LLM prompt plus vendored Rocky gist transform.
 
 TTS:
 
@@ -348,3 +356,46 @@ The next implementation target is to measure `trigger_to_first_audible_ms`.
 That means timing local playback startup after the response WAV is ready, then
 moving toward push-to-talk capture so the benchmark reflects how the assistant
 will actually feel on the Pi.
+
+The first implementation will treat local playback startup as the first audible
+proxy:
+
+```text
+trigger_to_first_audible_ms =
+  trigger_to_audio_ready_with_capture_ms + playback_startup_ms
+```
+
+This is not a true acoustic speaker measurement yet. A true speaker measurement
+would need loopback audio or a second microphone listening for the response.
+
+## Iteration 5: Persona Cleanup
+
+After testing the live voice loop by ear, the audio quality was acceptable but
+the persona had two problems:
+
+- Plain `rocky_say` was faithful to the vendored transform but sometimes felt
+  like generic assistant prose with articles removed.
+- Stronger `rocky_say_llm` sounded more playful, but the tiny local model and
+  Rocky transform could overuse `question question question` and
+  `amaze amaze amaze`.
+
+Decision:
+
+- Keep `rocky_say` stable and faithful.
+- Keep `rocky_say_llm` as the experimental stronger mode.
+- Remove prompt encouragement for repeated filler words.
+- Add a small cleanup pass for `rocky_say_llm` only, collapsing repeated
+  `question`, `amaze`, `good`, and `bad` artifacts.
+
+Result:
+
+```text
+Before:
+  question question question / amaze amaze amaze
+
+After:
+  I fix spaceship. You want know, question?
+```
+
+This is not the final Rocky personality, but it is a better baseline for live
+testing: useful, short, and less repetitive.

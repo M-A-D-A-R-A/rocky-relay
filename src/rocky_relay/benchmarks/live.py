@@ -5,10 +5,11 @@ from datetime import date, datetime
 from pathlib import Path
 import sys
 
-from rocky_relay.benchmark_doc import append_markdown_table_row
+from rocky_relay.benchmarks.doc import append_markdown_table_row
 from rocky_relay.config import Config, load_config
 from rocky_relay.mac_record import record_mac_audio
 from rocky_relay.pipeline import run_audio_turn
+from rocky_relay.playback import play_audio_timed
 
 
 def main() -> None:
@@ -29,6 +30,7 @@ def main() -> None:
     parser.add_argument("--llm", default="ollama", help="LLM backend. Use echo to isolate STT.")
     parser.add_argument("--persona", default="rocky_say", help="Persona backend.")
     parser.add_argument("--tts", default="smallest_ai", help="TTS backend. Use silent to isolate STT.")
+    parser.add_argument("--play", action="store_true", help="Play each response and measure playback startup.")
     parser.add_argument("--benchmark-file", default="BENCHMARK.md", help="Markdown file to append rows to.")
     args = parser.parse_args()
 
@@ -70,6 +72,20 @@ def main() -> None:
         timings = result.timings_ms
         audio_ready_ms = timings.get("trigger_to_audio_ready_ms", timings.get("total_turn_ms", ""))
         with_capture_ms = _with_capture(capture.duration_ms, audio_ready_ms)
+        playback_startup_ms: float | str = ""
+        first_audible_ms: float | str = ""
+        if args.play:
+            playback = play_audio_timed(result.audio_path, wait=True)
+            playback_startup_ms = playback.startup_ms
+            if playback.return_code == 0:
+                first_audible_ms = _with_capture(with_capture_ms, playback_startup_ms)
+            timings["playback_startup_ms"] = playback.startup_ms
+            if playback.return_code is not None:
+                timings["playback_return_code"] = playback.return_code
+            if playback.playback_finished_ms is not None:
+                timings["playback_finished_ms"] = playback.playback_finished_ms
+            if first_audible_ms != "":
+                timings["trigger_to_first_audible_ms"] = first_audible_ms
         row = (
             f"| {date.today().isoformat()} | `{capture.audio_path}` | `{stt_backend}` | "
             f"{timings.get('stt_transcription_ms', '')} | "
@@ -78,6 +94,8 @@ def main() -> None:
             f"{timings.get('tts_generation_ms', '')} | "
             f"{audio_ready_ms} | "
             f"{with_capture_ms} | "
+            f"{playback_startup_ms} | "
+            f"{first_audible_ms} | "
             f"`{result.input_text}` | `{result.audio_path}` | live benchmark command |\n"
         )
         append_markdown_table_row(benchmark_path, "Mac Mic Live Turn:", row)
@@ -90,6 +108,9 @@ def main() -> None:
             f"tts={timings.get('tts_generation_ms')}ms "
             f"audio_ready={audio_ready_ms}ms "
             f"with_capture={with_capture_ms}ms "
+            f"playback_startup={playback_startup_ms}ms "
+            f"first_audible={first_audible_ms}ms "
+            f"playback_return_code={timings.get('playback_return_code', '')} "
             f"transcript={result.input_text!r} "
             f"wav={result.audio_path}"
         )
@@ -101,9 +122,9 @@ def _default_live_capture_path(config: Config) -> Path:
     return capture_dir / f"benchmark-live-{stamp}.wav"
 
 
-def _with_capture(capture_duration_ms: float, audio_ready_ms: object) -> float | str:
+def _with_capture(capture_duration_ms: object, audio_ready_ms: object) -> float | str:
     try:
-        return round(capture_duration_ms + float(audio_ready_ms), 2)
+        return round(float(capture_duration_ms) + float(audio_ready_ms), 2)
     except (TypeError, ValueError):
         return ""
 

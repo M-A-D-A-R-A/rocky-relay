@@ -143,7 +143,7 @@ def _run_reply_turn(
     selected_persona = persona or config.persona
 
     with timer.measure("llm_full_response_ms"):
-        reply_text = build_llm(config, selected_llm).reply(text)
+        reply_text = build_llm(config, selected_llm, persona=selected_persona).reply(text)
 
     with timer.measure("persona_transform_ms"):
         spoken_text = apply_persona(
@@ -203,7 +203,10 @@ def main() -> None:
             "rocky_xtts, rocky_xtts_cli, rocky_yourtts, or smallest_ai."
         ),
     )
-    parser.add_argument("--persona", help="Override persona, e.g. none, rocky_basic, rocky_say.")
+    parser.add_argument(
+        "--persona",
+        help="Override persona, e.g. none, rocky_basic, rocky_say, or rocky_say_llm.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON result.")
     args = parser.parse_args()
 

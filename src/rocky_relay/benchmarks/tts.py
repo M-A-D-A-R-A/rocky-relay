@@ -5,23 +5,26 @@ from datetime import date
 from pathlib import Path
 import sys
 
-from rocky_relay.benchmark_doc import append_markdown_table_row
+from rocky_relay.benchmarks.doc import append_markdown_table_row
 from rocky_relay.config import load_config
-from rocky_relay.pipeline import run_audio_turn
+from rocky_relay.pipeline import run_typed_turn
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run STT/audio-turn benchmarks and append to BENCHMARK.md.")
-    parser.add_argument("--audio", required=True, type=Path, help="Audio file to transcribe.")
+    parser = argparse.ArgumentParser(description="Run TTS benchmark turns and append to BENCHMARK.md.")
     parser.add_argument(
-        "--stt",
+        "--text",
+        default="hello",
+        help="Prompt text to benchmark. Defaults to a tiny prompt for TTS isolation.",
+    )
+    parser.add_argument("--llm", default="echo", help="LLM backend. Use echo to isolate TTS.")
+    parser.add_argument("--persona", default="rocky_basic", help="Persona backend.")
+    parser.add_argument(
+        "--tts",
         action="append",
         required=True,
-        help="STT backend to benchmark. Repeat this flag for multiple backends.",
+        help="TTS backend to benchmark. Repeat this flag for multiple backends.",
     )
-    parser.add_argument("--llm", default="echo", help="LLM backend. Use echo to isolate STT.")
-    parser.add_argument("--persona", default="none", help="Persona backend.")
-    parser.add_argument("--tts", default="silent", help="TTS backend. Use silent to isolate STT.")
     parser.add_argument("--config", help="Path to config.json.")
     parser.add_argument("--benchmark-file", default="BENCHMARK.md", help="Markdown file to append rows to.")
     args = parser.parse_args()
@@ -29,40 +32,36 @@ def main() -> None:
     config = load_config(args.config)
     benchmark_path = Path(args.benchmark_file)
 
-    for stt_backend in args.stt:
+    for tts_backend in args.tts:
         try:
-            result = run_audio_turn(
-                args.audio,
+            result = run_typed_turn(
+                args.text,
                 config,
-                stt_backend=stt_backend,
                 llm_backend=args.llm,
-                tts_backend=args.tts,
+                tts_backend=tts_backend,
                 persona=args.persona,
             )
         except Exception as exc:
-            print(f"{stt_backend}: ERROR {exc}", file=sys.stderr)
+            print(f"{tts_backend}: ERROR {exc}", file=sys.stderr)
             continue
 
         timings = result.timings_ms
         row = (
-            f"| {date.today().isoformat()} | `{args.audio}` | `{stt_backend}` | "
-            f"{timings.get('stt_transcription_ms', '')} | "
+            f"| {date.today().isoformat()} | `{args.text}` | `{tts_backend}` | "
             f"{timings.get('llm_full_response_ms', '')} | "
             f"{timings.get('persona_transform_ms', '')} | "
             f"{timings.get('tts_generation_ms', '')} | "
             f"{timings.get('trigger_to_audio_ready_ms', timings.get('total_turn_ms', ''))} | "
-            f"`{result.input_text}` | `{result.audio_path}` | benchmark command |\n"
+            f"`{result.audio_path}` | benchmark command |\n"
         )
-        append_markdown_table_row(benchmark_path, "STT / Audio Turn:", row)
+        append_markdown_table_row(benchmark_path, "TTS:", row)
 
         print(
-            f"{stt_backend}: "
-            f"stt={timings.get('stt_transcription_ms')}ms "
+            f"{tts_backend}: "
             f"llm={timings.get('llm_full_response_ms')}ms "
             f"persona={timings.get('persona_transform_ms')}ms "
             f"tts={timings.get('tts_generation_ms')}ms "
             f"audio_ready={timings.get('trigger_to_audio_ready_ms', timings.get('total_turn_ms'))}ms "
-            f"transcript={result.input_text!r} "
             f"wav={result.audio_path}"
         )
 

@@ -4,11 +4,11 @@ import argparse
 import base64
 import json
 from pathlib import Path
-import subprocess
-import sys
 import tempfile
 import urllib.error
 import urllib.request
+
+from rocky_relay.playback import play_audio
 
 
 def send_typed_turn(
@@ -50,16 +50,6 @@ def write_audio(result: dict[str, object], output: Path) -> None:
     output.write_bytes(base64.b64decode(audio))
 
 
-def play_audio(path: Path) -> None:
-    if sys.platform == "darwin":
-        subprocess.run(["afplay", str(path)], check=False)
-        return
-    if sys.platform.startswith("linux"):
-        subprocess.run(["aplay", str(path)], check=False)
-        return
-    raise RuntimeError(f"Playback is not implemented for platform: {sys.platform}")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Send a typed prompt to a Rocky Relay server.")
     parser.add_argument("text", nargs="?", help="Typed prompt.")
@@ -72,7 +62,10 @@ def main() -> None:
             "rocky_xtts, rocky_xtts_cli, rocky_yourtts, or smallest_ai."
         ),
     )
-    parser.add_argument("--persona", help="Override persona, e.g. none, rocky_basic, rocky_say.")
+    parser.add_argument(
+        "--persona",
+        help="Override persona, e.g. none, rocky_basic, rocky_say, or rocky_say_llm.",
+    )
     parser.add_argument("--output", type=Path, help="Where to write the returned WAV.")
     parser.add_argument("--play", action="store_true", help="Play the returned WAV.")
     parser.add_argument("--json", action="store_true", help="Print the server JSON without audio.")

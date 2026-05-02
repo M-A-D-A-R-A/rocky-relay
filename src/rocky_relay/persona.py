@@ -12,6 +12,8 @@ def apply_persona(text: str, persona: str, rocky_say_path: Path) -> str:
         return rocky_basic(text)
     if persona == "rocky_say":
         return rocky_say_transform(text, rocky_say_path)
+    if persona == "rocky_say_llm":
+        return soften_rocky_repetition(rocky_say_transform(text, rocky_say_path))
     raise ValueError(f"Unknown persona: {persona}")
 
 
@@ -54,3 +56,13 @@ def rocky_say_transform(text: str, rocky_say_path: Path) -> str:
         detail = result.stderr.strip() or result.stdout.strip()
         raise RuntimeError(f"rocky_say transform failed: {detail}")
     return result.stdout.strip()
+
+
+def soften_rocky_repetition(text: str) -> str:
+    result = text
+    result = re.sub(r"\b(question)(?:[,\s]+question\b)+", r"\1", result, flags=re.IGNORECASE)
+    result = re.sub(r"\b(amaze)(?:[,\s]+amaze\b)+", r"\1", result, flags=re.IGNORECASE)
+    result = re.sub(r"\b(good)(?:[,\s]+good\b){2,}", r"good", result, flags=re.IGNORECASE)
+    result = re.sub(r"\b(bad)(?:[,\s]+bad\b){2,}", r"bad", result, flags=re.IGNORECASE)
+    result = re.sub(r"\s+", " ", result).strip()
+    return result

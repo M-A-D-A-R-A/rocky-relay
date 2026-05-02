@@ -10,10 +10,10 @@ import shutil
 import subprocess
 import sys
 
-from rocky_relay.client.typed import play_audio
 from rocky_relay.config import Config, load_config
 from rocky_relay.logging import append_jsonl
 from rocky_relay.pipeline import TurnResult, run_audio_turn
+from rocky_relay.playback import PlaybackResult, play_audio_timed
 
 
 @dataclass
@@ -113,7 +113,8 @@ def run_recorded_turn(
     llm_backend: str | None = None,
     tts_backend: str | None = None,
     persona: str | None = None,
-) -> tuple[CaptureResult, TurnResult]:
+    play_response: bool = False,
+) -> tuple[CaptureResult, TurnResult, PlaybackResult | None]:
     trigger_start = perf_counter()
     capture = record_mac_audio(
         ffmpeg_bin=config.ffmpeg_bin,
@@ -136,15 +137,28 @@ def run_recorded_turn(
         (perf_counter() - trigger_start) * 1000,
         2,
     )
-    _log_recorded_turn(config, capture, result)
-    return capture, result
+    playback: PlaybackResult | None = None
+    if play_response:
+        playback = play_audio_timed(result.audio_path, wait=True)
+        result.timings_ms["playback_startup_ms"] = playback.startup_ms
+        if playback.return_code is not None:
+            result.timings_ms["playback_return_code"] = playback.return_code
+        if playback.playback_finished_ms is not None:
+            result.timings_ms["playback_finished_ms"] = playback.playback_finished_ms
+        if playback.return_code == 0:
+            result.timings_ms["trigger_to_first_audible_ms"] = round(
+                result.timings_ms["trigger_to_audio_ready_with_capture_ms"] + playback.startup_ms,
+                2,
+            )
+    _log_recorded_turn(config, capture, result, playback)
+    return capture, result, playback
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Record from the Mac mic and run one Rocky Relay turn.")
     parser.add_argument("--config", help="Path to config.json.")
     parser.add_argument("--list-devices", action="store_true", help="List macOS AVFoundation devices.")
-    parser.add_argument("--device", help='AVFoundation input device, e.g. ":0" for first audio device.')
+    parser.add_argument("--device", help='AVFoundation input device, e.g. ":1" for MacBook Pro Microphone.')
     parser.add_argument("--duration", type=float, help="Recording duration in seconds.")
     parser.add_argument("--sample-rate", type=int, help="Recorded WAV sample rate.")
     parser.add_argument("--channels", type=int, help="Recorded WAV channel count.")
@@ -159,7 +173,10 @@ def main() -> None:
             "rocky_xtts, rocky_xtts_cli, rocky_yourtts, or smallest_ai."
         ),
     )
-    parser.add_argument("--persona", help="Override persona, e.g. none, rocky_basic, rocky_say.")
+    parser.add_argument(
+        "--persona",
+        help="Override persona, e.g. none, rocky_basic, rocky_say, or rocky_say_llm.",
+    )
     parser.add_argument("--play", action="store_true", help="Play the generated response WAV with afplay.")
     parser.add_argument("--json", action="store_true", help="Print JSON without embedded audio bytes.")
     args = parser.parse_args()
@@ -188,7 +205,7 @@ def main() -> None:
             print(f"Capture duration: {capture.duration_ms}ms")
             return
 
-        capture, result = run_recorded_turn(
+        capture, result, playback = run_recorded_turn(
             config,
             capture_path=capture_path,
             duration_s=args.duration,
@@ -199,13 +216,11 @@ def main() -> None:
             llm_backend=args.llm,
             tts_backend=args.tts,
             persona=args.persona,
+            play_response=args.play,
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
-
-    if args.play:
-        play_audio(result.audio_path)
 
     if args.json:
         printable = result.as_dict(include_audio=False)
@@ -213,6 +228,14 @@ def main() -> None:
             "audio_path": str(capture.audio_path),
             "duration_ms": capture.duration_ms,
         }
+        if playback is not None:
+            printable["playback"] = {
+                "command": playback.command,
+                "startup_ms": playback.startup_ms,
+                "playback_finished_ms": playback.playback_finished_ms,
+                "return_code": playback.return_code,
+                "error": playback.error,
+            }
         print(json.dumps(printable, indent=2))
         return
 
@@ -230,7 +253,12 @@ def _default_capture_path(config: Config) -> Path:
     return capture_dir / f"mac-mic-{stamp}.wav"
 
 
-def _log_recorded_turn(config: Config, capture: CaptureResult, result: TurnResult) -> None:
+def _log_recorded_turn(
+    config: Config,
+    capture: CaptureResult,
+    result: TurnResult,
+    playback: PlaybackResult | None = None,
+) -> None:
     record = result.as_dict(include_audio=False)
     record["created_at"] = datetime.now(timezone.utc).isoformat()
     record["capture"] = {
@@ -238,6 +266,14 @@ def _log_recorded_turn(config: Config, capture: CaptureResult, result: TurnResul
         "duration_ms": capture.duration_ms,
         "command": capture.command,
     }
+    if playback is not None:
+        record["playback"] = {
+            "command": playback.command,
+            "startup_ms": playback.startup_ms,
+            "playback_finished_ms": playback.playback_finished_ms,
+            "return_code": playback.return_code,
+            "error": playback.error,
+        }
     append_jsonl(config.resolve(config.log_dir) / "recorded_turns.jsonl", record)
 
 
