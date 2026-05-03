@@ -491,3 +491,46 @@ The result was encouraging: playback startup was only 4-8ms, so the user-facing
 latency is now dominated by how long the user holds the key plus server-side
 STT/LLM/TTS. The second turn reached server audio-ready in about 1.7s, while
 the slower first turn was mostly Ollama latency.
+
+## Iteration 8: Swift Mac Companion
+
+After exploring `agentrocky`, we kept the core lesson but changed the
+integration point. `agentrocky` is a native Swift desktop companion around
+Claude Code; Rocky Relay needs a companion around the existing `/audio` voice
+API.
+
+Decision:
+
+- Keep Rocky Relay Python as the backend and future Pi contract.
+- Add a separate `mac-companion/` Swift app for Mac-only demo polish.
+- Do not move STT/LLM/TTS into Swift.
+- Do not replace the Pi-shaped `/audio` boundary.
+
+The first companion scaffold provides:
+
+```text
+floating Mac panel
+  -> server /health check
+  -> microphone record button
+  -> POST WAV to /audio
+  -> conversation panel
+  -> local response playback
+```
+
+This gives the project an `agentrocky`-style face while preserving the clean
+client/server split.
+
+We then copied the reference pixel Rocky sprite frames into the companion and
+wired basic animation:
+
+- walking frames while idle,
+- standing while listening/thinking/speaking,
+- jazz frames after a successful response.
+
+The companion UI was then simplified from a boxed control panel into a desktop
+creature:
+
+- transparent always-on-top overlay,
+- Rocky walks horizontally along the Dock line,
+- click/Tab/Enter/Space toggles recording,
+- transcript and response appear as bubbles hovering above Rocky.

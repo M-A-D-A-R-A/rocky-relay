@@ -15,6 +15,7 @@ Project narrative and decision history:
 - [Project Journey](docs/project-journey.md)
 - [Benchmarks](BENCHMARK.md)
 - [Security Notes](docs/security.md)
+- [Mac Companion](mac-companion/README.md)
 
 ## Why This Name
 
@@ -32,6 +33,8 @@ Project narrative and decision history:
   https://gist.github.com/pedramamini/fa5f6ef99dae79add220188419230642
 - Coyote Interactive:
   https://github.com/gregm123456/coyote_interactive
+- Agent Rocky Mac companion reference:
+  https://github.com/itmesneha/agentrocky
 - Local tested Rocky clone assets:
   `../rocky-pi/rocky/`
 
@@ -299,6 +302,10 @@ src/rocky_relay/
   mac_ptt.py      macOS global hold-to-talk client.
   persona.py      none, rocky_basic, and rocky_say persona transforms.
   config.py       JSON config loader.
+
+mac-companion/
+  RockyCompanion.xcodeproj
+                 Swift macOS floating companion app for demos.
 ```
 
 The scaffold is deliberately small so the future Pi client can stay reliable.
@@ -939,6 +946,29 @@ Show the last two live turns:
 ```bash
 tail -2 logs/conversations/recorded_turns.jsonl
 ```
+
+## Swift Mac Companion
+
+For a more visual demo, use the separate Swift companion app:
+
+```bash
+rocky-relay-server
+open mac-companion/RockyCompanion.xcodeproj
+```
+
+Then press `Cmd+R` in Xcode. The companion is a Mac-only layer inspired by
+`agentrocky`: floating UI, Rocky status bubble, conversation panel, microphone
+capture, `/audio` request, and local playback.
+
+If the project opens in Finder instead of Xcode, run the SwiftPM fallback:
+
+```bash
+cd mac-companion
+swift run RockyCompanion
+```
+
+This does not replace the Python backend or future Pi client. It is just a Mac
+presentation/client layer on top of the same Rocky Relay HTTP API.
 
 
 Record once and benchmark both hosted and local STT on the same spoken prompt:

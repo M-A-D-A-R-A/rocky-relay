@@ -20,3 +20,9 @@ models/
 *.flac
 *.onnx
 *.onnx.json
+
+# Swift/Xcode local build state
+.build/
+**/.build/
+mac-companion/.swiftpm/
+DerivedData/
