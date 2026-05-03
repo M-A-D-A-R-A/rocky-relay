@@ -54,6 +54,11 @@ def main() -> None:
     )
     parser.add_argument("--conversation-id", help="Optional conversation id. Defaults to one id per session.")
     parser.add_argument("--no-play", action="store_true", help="Do not play the generated response.")
+    parser.add_argument(
+        "--conversation-only",
+        action="store_true",
+        help="Print only You/Rocky conversation lines; still writes full JSONL logs.",
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON without embedded audio bytes.")
     args = parser.parse_args()
 
@@ -73,6 +78,7 @@ def main() -> None:
         conversation_id=conversation_id,
         play_response=not args.no_play,
         print_json=args.json,
+        conversation_only=args.conversation_only,
     )
 
 
@@ -91,6 +97,7 @@ def run_mac_ptt(
     conversation_id: str,
     play_response: bool,
     print_json: bool,
+    conversation_only: bool,
 ) -> None:
     keyboard = _load_keyboard()
     hotkey_keys = _resolve_hotkey(keyboard, hotkey)
@@ -141,6 +148,7 @@ def run_mac_ptt(
                 conversation_id=conversation_id,
                 play_response=play_response,
                 print_json=print_json,
+                conversation_only=conversation_only,
             )
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -174,6 +182,7 @@ def _send_and_play_turn(
     conversation_id: str,
     play_response: bool,
     print_json: bool,
+    conversation_only: bool,
 ) -> None:
     network_start = perf_counter()
     result = send_audio_turn(
@@ -211,7 +220,14 @@ def _send_and_play_turn(
     result["timings_ms"] = timings
     result["client_audio_path"] = str(response_path)
     _log_recorded_server_turn(config, capture, result, playback)
-    _print_result(capture, result, response_path, playback, as_json=print_json)
+    _print_result(
+        capture,
+        result,
+        response_path,
+        playback,
+        as_json=print_json,
+        conversation_only=conversation_only,
+    )
 
 
 def _load_keyboard() -> object:
@@ -296,6 +312,7 @@ def _print_result(
     playback: PlaybackResult | None,
     *,
     as_json: bool,
+    conversation_only: bool,
 ) -> None:
     if as_json:
         printable = {k: v for k, v in result.items() if k != "audio_wav_base64"}
@@ -312,6 +329,11 @@ def _print_result(
                 "error": playback.error,
             }
         print(json.dumps(printable, indent=2))
+        return
+
+    if conversation_only:
+        print(f"You: {result.get('input_text')}")
+        print(f"Rocky: {result.get('spoken_text')}")
         return
 
     print(f"Captured: {capture.audio_path}")

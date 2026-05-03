@@ -804,7 +804,8 @@ rocky-relay-interact \
   --stt smallest_ai \
   --llm ollama \
   --persona rocky_say_llm \
-  --tts smallest_ai
+  --tts smallest_ai \
+  --conversation-only
 ```
 
 If the command is not found after pulling this change:
@@ -847,8 +848,18 @@ rocky-relay-mac-ptt \
   --stt smallest_ai \
   --llm ollama \
   --persona rocky_say_llm \
-  --tts smallest_ai
+  --tts smallest_ai \
+  --conversation-only
 ```
+
+`--conversation-only` keeps the terminal clean for demos:
+
+```text
+You: I am reading Project Hail Mary.
+Rocky: You read Project Hail Mary, question? Amaze.
+```
+
+Full latency data still goes into `logs/conversations/recorded_turns.jsonl`.
 
 Use a different hold key if Option conflicts with your workflow:
 
@@ -860,7 +871,8 @@ rocky-relay-mac-ptt \
   --stt smallest_ai \
   --llm ollama \
   --persona rocky_say_llm \
-  --tts smallest_ai
+  --tts smallest_ai \
+  --conversation-only
 ```
 
 Supported hotkey examples:

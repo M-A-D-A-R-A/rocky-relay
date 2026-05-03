@@ -33,6 +33,14 @@ hold-to-talk trigger. It uses optional `pynput`, installed with:
 pip install -e ".[mac]"
 ```
 
+For demos, `--conversation-only` prints only the conversational transcript while
+still writing full timing logs:
+
+```text
+You: I am reading Project Hail Mary.
+Rocky: You read Project Hail Mary, question? Amaze.
+```
+
 ## Timing
 
 Mac PTT records client-side timing fields into
