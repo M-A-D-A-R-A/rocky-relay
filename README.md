@@ -2,10 +2,10 @@
 
 ## Demo
 
-<video src="mac-companion/demo/rocky_mac.mov" controls width="720"></video>
+[![Rocky Relay Mac companion demo](mac-companion/demo/rocky_mac_preview.gif)](mac-companion/demo/rocky_mac_twitter.mp4)
 
-If the video does not render inline, watch it here:
-[rocky_mac.mov](mac-companion/demo/rocky_mac.mov)
+Click the preview to watch the full demo:
+[rocky_mac_twitter.mp4](mac-companion/demo/rocky_mac_twitter.mp4)
 
 Low-latency personal voice assistant experiment inspired by Rocky from
 Project Hail Mary.
