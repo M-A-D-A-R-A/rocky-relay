@@ -279,9 +279,10 @@ for the app shell:
 ```text
 src/rocky_relay/client/
   typed.py        Typed client that calls the local server and writes WAV output.
+  audio.py        Audio client that sends WAV input to the local server.
 
 src/rocky_relay/server/
-  app.py          Minimal HTTP server using Python's standard library.
+  app.py          Minimal HTTP server with /chat and /audio endpoints.
 
 src/rocky_relay/backends/
   llm.py          Echo and Ollama LLM backends.
@@ -295,6 +296,7 @@ src/rocky_relay/benchmarks/
 
 src/rocky_relay/
   pipeline.py     Typed turn pipeline and JSONL latency logging.
+  mac_ptt.py      macOS global hold-to-talk client.
   persona.py      none, rocky_basic, and rocky_say persona transforms.
   config.py       JSON config loader.
 ```
@@ -317,6 +319,12 @@ Optionally create a local virtual environment and install the package commands:
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e .
+```
+
+For macOS global push-to-talk, install the optional hotkey dependency:
+
+```bash
+pip install -e ".[mac]"
 ```
 
 On this Mac, if `python3.12` is not the Python you want, pyenv 3.11 also works:
@@ -356,6 +364,14 @@ Or, after editable install:
 rocky-relay-server
 ```
 
+The server exposes:
+
+```text
+GET  /health
+POST /chat
+POST /audio
+```
+
 In another terminal, send a typed prompt through the server:
 
 ```bash
@@ -377,6 +393,21 @@ rocky-relay-typed \
   --tts tone \
   --persona rocky_basic \
   --output outputs/client-test.wav \
+  --json
+```
+
+Send an existing WAV through the same audio endpoint that Mac PTT and the
+future Pi client use:
+
+```bash
+rocky-relay-audio \
+  samples/hello-friend.wav \
+  --server http://127.0.0.1:8765 \
+  --stt whisper_cpp \
+  --llm echo \
+  --persona none \
+  --tts silent \
+  --output outputs/audio-client-test.wav \
   --json
 ```
 
@@ -506,14 +537,21 @@ Each typed turn writes:
 
 ```text
 outputs/<request_id>.wav
-logs/turns.jsonl
+logs/conversations/turns.jsonl
 ```
 
 Each Mac microphone turn also writes:
 
 ```text
 captures/mac-mic-<timestamp>.wav
-logs/recorded_turns.jsonl
+logs/conversations/recorded_turns.jsonl
+```
+
+Benchmark commands keep their pipeline logs separate:
+
+```text
+logs/benchmarks/turns.jsonl
+BENCHMARK.md
 ```
 
 Each JSONL record includes:
@@ -523,7 +561,18 @@ Each JSONL record includes:
 - Spoken/persona text.
 - Selected backends.
 - Audio output path.
+- Optional `conversation_id` for grouping multiple live turns into one session.
 - Millisecond timings for LLM, persona transform, and TTS generation.
+
+To merge old root-level JSONL logs into the separated folders, run:
+
+```bash
+rocky-relay-migrate-logs --gap-minutes 10
+```
+
+The migration keeps benchmark-like rows under `logs/benchmarks/turns.jsonl` and
+conversation rows under `logs/conversations/`. Recorded turns close together in
+time receive the same `conversation_id`, so a three-turn live chat stays grouped.
 
 ## First Build Target Status
 
@@ -719,6 +768,116 @@ Instead of exporting the key every time, you can put this in ignored `.env`:
 SMALLEST_API_KEY=...
 ```
 
+Restart `rocky-relay-server` after changing `.env`; the server reads the key at
+startup. If you launch commands outside this repo, set `ROCKY_RELAY_ROOT` or pass
+`--config` so the server can find the right `.env`.
+
+## Interactive Loop
+
+The first real interaction loop is Enter-to-talk:
+
+```text
+Enter -> start recording
+Enter -> stop recording and send
+STT -> LLM -> persona -> TTS
+play response
+```
+
+Run one interaction turn:
+
+```bash
+rocky-relay-interact \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say_llm \
+  --tts smallest_ai \
+  --once \
+  --json
+```
+
+Run a continuous terminal loop:
+
+```bash
+rocky-relay-interact \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say_llm \
+  --tts smallest_ai
+```
+
+If the command is not found after pulling this change:
+
+```bash
+pip install -e .
+```
+
+## Mac Push-To-Talk
+
+The Mac push-to-talk path uses the same server boundary planned for the Pi:
+
+```text
+hold Option
+  -> capture mic WAV locally
+  -> POST WAV to server /audio
+  -> STT -> LLM -> persona -> TTS on server
+  -> receive response WAV
+  -> play locally
+```
+
+Install the optional global hotkey dependency:
+
+```bash
+pip install -e ".[mac]"
+```
+
+Start the server:
+
+```bash
+rocky-relay-server
+```
+
+In another terminal, hold either Option key to talk and release to send:
+
+```bash
+rocky-relay-mac-ptt \
+  --server http://127.0.0.1:8765 \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say_llm \
+  --tts smallest_ai
+```
+
+Use a different hold key if Option conflicts with your workflow:
+
+```bash
+rocky-relay-mac-ptt \
+  --hotkey space \
+  --server http://127.0.0.1:8765 \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say_llm \
+  --tts smallest_ai
+```
+
+Supported hotkey examples:
+
+- `option`
+- `left_option`
+- `right_option`
+- `space`
+- `f8`
+- single characters like `x`
+
+macOS may require Accessibility permission for global hotkeys:
+
+```text
+System Settings -> Privacy & Security -> Accessibility
+```
+
 Record once and benchmark both hosted and local STT on the same spoken prompt:
 
 If this command was installed before the benchmark package cleanup, refresh the
@@ -791,14 +950,13 @@ rocky-relay-turn \
 
 ## Next Build Target
 
-Move from fixed-duration Mac recording to true push-to-talk:
+Move from Mac push-to-talk to the first Pi-shaped client:
 
 ```text
-push-to-talk
-  -> record until release
-  -> send WAV to local server endpoint
-  -> transcribe
-  -> reuse existing typed turn pipeline
-  -> start playback
-  -> measure trigger-to-first-audible
+Pi button press/release
+  -> record local mic WAV
+  -> send WAV to the same /audio endpoint
+  -> receive response WAV
+  -> play on Pi speaker
+  -> log client/server timing split
 ```

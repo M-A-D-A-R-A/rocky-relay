@@ -40,6 +40,7 @@ def main() -> None:
                 llm_backend=args.llm,
                 tts_backend=tts_backend,
                 persona=args.persona,
+                log_scope="benchmark",
             )
         except Exception as exc:
             print(f"{tts_backend}: ERROR {exc}", file=sys.stderr)

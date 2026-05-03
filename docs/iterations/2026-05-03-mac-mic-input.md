@@ -18,7 +18,7 @@ Added `rocky-relay-record-turn`, a Python CLI that:
 - saves the input under `captures/`,
 - runs the existing `run_audio_turn(...)` pipeline,
 - writes the response under `outputs/`,
-- appends live records to `logs/recorded_turns.jsonl`,
+- appends live records to `logs/conversations/recorded_turns.jsonl`,
 - optionally plays the response with `--play`.
 
 ## Why Fixed Duration First

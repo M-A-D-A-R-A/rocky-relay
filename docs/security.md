@@ -26,7 +26,8 @@ Before committing, run:
 
 ```bash
 rg -n --hidden --glob '!/.git/**' --glob '!outputs/**' --glob '!logs/**' \
-  --glob '!models/**' --glob '!.venv/**' 'sk_[A-Za-z0-9_]+' .
+  --glob '!models/**' --glob '!.venv/**' --glob '!captures/**' \
+  --glob '!.env' 'sk_[A-Za-z0-9_]+' .
 ```
 
 Expected result:

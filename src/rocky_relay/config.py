@@ -13,6 +13,8 @@ class Config:
     host: str = "127.0.0.1"
     port: int = 8765
     log_dir: Path = Path("logs")
+    conversation_log_dir: Path = Path("logs/conversations")
+    benchmark_log_dir: Path = Path("logs/benchmarks")
     output_dir: Path = Path("outputs")
     capture_dir: Path = Path("captures")
     ffmpeg_bin: str = "ffmpeg"
@@ -59,7 +61,7 @@ class Config:
 def load_config(path: str | Path | None = None) -> Config:
     config_path = _find_config_path(path)
     raw: dict[str, Any] = {}
-    root_dir = Path.cwd()
+    root_dir = _find_project_root()
 
     if config_path:
         root_dir = config_path.parent.resolve()
@@ -76,6 +78,8 @@ def load_config(path: str | Path | None = None) -> Config:
         host=str(raw.get("host", Config.host)),
         port=int(raw.get("port", Config.port)),
         log_dir=read_path("log_dir", "logs"),
+        conversation_log_dir=read_path("conversation_log_dir", "logs/conversations"),
+        benchmark_log_dir=read_path("benchmark_log_dir", "logs/benchmarks"),
         output_dir=read_path("output_dir", "outputs"),
         capture_dir=read_path("capture_dir", "captures"),
         ffmpeg_bin=str(raw.get("ffmpeg_bin", Config.ffmpeg_bin)),
@@ -129,10 +133,31 @@ def _find_config_path(path: str | Path | None) -> Path | None:
             raise FileNotFoundError(f"Config file not found: {candidate}")
         return candidate.resolve()
 
-    default = Path.cwd() / "config.json"
-    if default.exists():
-        return default.resolve()
+    for candidate_root in _candidate_roots():
+        default = candidate_root / "config.json"
+        if default.exists():
+            return default.resolve()
     return None
+
+
+def _find_project_root() -> Path:
+    explicit = os.environ.get("ROCKY_RELAY_ROOT")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+
+    for candidate_root in _candidate_roots():
+        if (candidate_root / ".env").exists() or (candidate_root / "pyproject.toml").exists():
+            return candidate_root.resolve()
+    return Path.cwd().resolve()
+
+
+def _candidate_roots() -> list[Path]:
+    cwd = Path.cwd().resolve()
+    roots = [cwd, *cwd.parents]
+    source_root = Path(__file__).resolve().parents[2]
+    if source_root not in roots:
+        roots.append(source_root)
+    return roots
 
 
 def _load_dotenv(path: Path) -> None:
@@ -142,6 +167,8 @@ def _load_dotenv(path: Path) -> None:
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
         name, value = line.split("=", 1)
         name = name.strip()
         value = value.strip().strip("\"'")

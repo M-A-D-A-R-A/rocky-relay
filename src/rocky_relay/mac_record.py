@@ -23,6 +23,14 @@ class CaptureResult:
     command: list[str]
 
 
+@dataclass
+class ActiveCapture:
+    audio_path: Path
+    started_at: float
+    process: subprocess.Popen[str]
+    command: list[str]
+
+
 def list_avfoundation_devices(ffmpeg_bin: str) -> str:
     _ensure_ffmpeg(ffmpeg_bin)
     result = subprocess.run(
@@ -101,6 +109,77 @@ def record_mac_audio(
     return CaptureResult(audio_path=output_path, duration_ms=duration_ms, command=command)
 
 
+def start_mac_audio_capture(
+    *,
+    ffmpeg_bin: str,
+    device: str,
+    output_path: Path,
+    sample_rate: int,
+    channels: int,
+) -> ActiveCapture:
+    _ensure_ffmpeg(ffmpeg_bin)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        ffmpeg_bin,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "avfoundation",
+        "-i",
+        device,
+        "-vn",
+        "-ac",
+        str(channels),
+        "-ar",
+        str(sample_rate),
+        "-acodec",
+        "pcm_s16le",
+        str(output_path),
+    ]
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return ActiveCapture(
+        audio_path=output_path,
+        started_at=perf_counter(),
+        process=process,
+        command=command,
+    )
+
+
+def stop_mac_audio_capture(active: ActiveCapture, *, timeout_s: float = 8.0) -> CaptureResult:
+    process = active.process
+    if process.stdin is not None:
+        process.stdin.write("q\n")
+        process.stdin.flush()
+    try:
+        _stdout, stderr = process.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        _stdout, stderr = process.communicate(timeout=timeout_s)
+
+    duration_ms = round((perf_counter() - active.started_at) * 1000, 2)
+    if process.returncode != 0:
+        detail = (stderr or "").strip()
+        raise RuntimeError(
+            "Mac microphone capture failed. If this is the first run, grant microphone "
+            f"permission to your terminal app and retry. ffmpeg said: {detail}"
+        )
+    if not active.audio_path.exists() or active.audio_path.stat().st_size == 0:
+        raise RuntimeError(f"Mac microphone capture produced no audio: {active.audio_path}")
+    return CaptureResult(
+        audio_path=active.audio_path,
+        duration_ms=duration_ms,
+        command=active.command,
+    )
+
+
 def run_recorded_turn(
     config: Config,
     *,
@@ -113,6 +192,7 @@ def run_recorded_turn(
     llm_backend: str | None = None,
     tts_backend: str | None = None,
     persona: str | None = None,
+    conversation_id: str | None = None,
     play_response: bool = False,
 ) -> tuple[CaptureResult, TurnResult, PlaybackResult | None]:
     trigger_start = perf_counter()
@@ -131,6 +211,7 @@ def run_recorded_turn(
         llm_backend=llm_backend,
         tts_backend=tts_backend,
         persona=persona,
+        conversation_id=conversation_id,
     )
     result.timings_ms["capture_duration_ms"] = capture.duration_ms
     result.timings_ms["trigger_to_audio_ready_with_capture_ms"] = round(
@@ -177,6 +258,7 @@ def main() -> None:
         "--persona",
         help="Override persona, e.g. none, rocky_basic, rocky_say, or rocky_say_llm.",
     )
+    parser.add_argument("--conversation-id", help="Optional conversation id to write into logs.")
     parser.add_argument("--play", action="store_true", help="Play the generated response WAV with afplay.")
     parser.add_argument("--json", action="store_true", help="Print JSON without embedded audio bytes.")
     args = parser.parse_args()
@@ -216,6 +298,7 @@ def main() -> None:
             llm_backend=args.llm,
             tts_backend=args.tts,
             persona=args.persona,
+            conversation_id=args.conversation_id,
             play_response=args.play,
         )
     except Exception as exc:
@@ -247,13 +330,17 @@ def main() -> None:
     print(f"Timings: {result.timings_ms}")
 
 
-def _default_capture_path(config: Config) -> Path:
+def default_capture_path(config: Config, *, prefix: str = "mac-mic") -> Path:
     capture_dir = config.resolve(config.capture_dir)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return capture_dir / f"mac-mic-{stamp}.wav"
+    return capture_dir / f"{prefix}-{stamp}.wav"
 
 
-def _log_recorded_turn(
+def _default_capture_path(config: Config) -> Path:
+    return default_capture_path(config)
+
+
+def log_recorded_turn(
     config: Config,
     capture: CaptureResult,
     result: TurnResult,
@@ -274,7 +361,16 @@ def _log_recorded_turn(
             "return_code": playback.return_code,
             "error": playback.error,
         }
-    append_jsonl(config.resolve(config.log_dir) / "recorded_turns.jsonl", record)
+    append_jsonl(config.resolve(config.conversation_log_dir) / "recorded_turns.jsonl", record)
+
+
+def _log_recorded_turn(
+    config: Config,
+    capture: CaptureResult,
+    result: TurnResult,
+    playback: PlaybackResult | None = None,
+) -> None:
+    log_recorded_turn(config, capture, result, playback)
 
 
 def _ensure_ffmpeg(ffmpeg_bin: str) -> None:

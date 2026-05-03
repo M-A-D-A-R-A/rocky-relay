@@ -399,3 +399,95 @@ After:
 
 This is not the final Rocky personality, but it is a better baseline for live
 testing: useful, short, and less repetitive.
+
+## Iteration 6: First Interaction Loop
+
+After fixed-duration recording and live benchmarks, we added the first real
+terminal interaction loop:
+
+```bash
+rocky-relay-interact
+```
+
+This changes the interaction from "record for N seconds" to:
+
+```text
+press Enter to start recording
+press Enter to stop recording
+captured WAV -> STT -> LLM -> persona -> TTS -> playback
+```
+
+The command supports one-shot testing with `--once` and continuous terminal use
+without `--once`. Conversation logs now live separately from benchmark logs:
+
+```text
+logs/conversations/turns.jsonl
+logs/conversations/recorded_turns.jsonl
+logs/benchmarks/turns.jsonl
+```
+
+Each interactive session now gets one `conversation_id`, so consecutive turns
+from the same live chat can be analyzed together instead of as isolated rows.
+The migration command can also backfill old root-level logs into the separated
+folders and group recorded turns by timestamp gap:
+
+```bash
+rocky-relay-migrate-logs --gap-minutes 10
+```
+
+It reuses the same timing fields, including:
+
+- `capture_duration_ms`
+- `trigger_to_audio_ready_with_capture_ms`
+- `playback_startup_ms`
+- `trigger_to_first_audible_ms`
+
+This is still not final Pi push-to-talk, but it is much closer to the real
+assistant feel because the user controls when speech starts and stops.
+
+## Iteration 7: Server-First Mac Push-To-Talk
+
+After the Enter-to-talk loop, we moved the live interaction shape closer to the
+future Pi architecture by adding an audio endpoint to the local server:
+
+```text
+client-recorded WAV -> POST /audio -> STT -> LLM -> persona -> TTS -> response WAV
+```
+
+This keeps heavy work on the Mac/LAN server while the client owns the physical
+interaction loop: key/button state, microphone capture, response playback, and
+client-side timing.
+
+Implemented commands:
+
+```bash
+rocky-relay-audio
+rocky-relay-mac-ptt
+```
+
+`rocky-relay-mac-ptt` uses a global hold key through the optional `pynput`
+dependency. The default hotkey is either macOS Option/Alt key, with overrides
+such as `left_option`, `right_option`, `space`, and `f8`.
+
+The key architectural decision: Mac PTT now uses the same `/audio` server path
+that the Raspberry Pi client should use later, rather than calling the local
+pipeline directly.
+
+The first successful Option-key PTT conversation proved the full loop:
+
+```text
+conversation_id: conv_fd2bffb617e3
+Mac Option key -> ffmpeg capture -> POST /audio -> server STT/LLM/TTS -> afplay
+```
+
+Observed timings:
+
+| Prompt | Capture | Server Audio Ready | Network Roundtrip | First Audible |
+| --- | ---: | ---: | ---: | ---: |
+| `I don't like movies.` | 3046ms | 3448ms | 3462ms | 6523ms |
+| `I am reading Project Helmery currently.` | 4030ms | 1723ms | 1737ms | 5791ms |
+
+The result was encouraging: playback startup was only 4-8ms, so the user-facing
+latency is now dominated by how long the user holds the key plus server-side
+STT/LLM/TTS. The second turn reached server audio-ready in about 1.7s, while
+the slower first turn was mostly Ollama latency.

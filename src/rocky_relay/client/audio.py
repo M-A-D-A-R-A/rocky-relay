@@ -6,31 +6,49 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from time import perf_counter
 import urllib.error
 import urllib.request
 
 from rocky_relay.playback import play_audio
 
 
-def send_typed_turn(
-    text: str,
+def send_audio_turn(
+    audio_path: Path,
     server_url: str,
     *,
+    stt_backend: str | None = None,
     llm_backend: str | None = None,
     tts_backend: str | None = None,
     persona: str | None = None,
     conversation_id: str | None = None,
 ) -> dict[str, object]:
+    resolved_audio_path = audio_path.expanduser()
+    if not resolved_audio_path.exists():
+        raise FileNotFoundError(f"Audio file not found: {resolved_audio_path}")
     payload = {
-        "text": text,
+        "audio_wav_base64": base64.b64encode(resolved_audio_path.read_bytes()).decode("ascii"),
+        "stt_backend": stt_backend,
         "llm_backend": llm_backend,
         "tts_backend": tts_backend,
         "persona": persona,
         "conversation_id": conversation_id,
     }
+    return _post_json(server_url, "/audio", payload)
+
+
+def write_audio(result: dict[str, object], output: Path) -> None:
+    audio = result.get("audio_wav_base64")
+    if not isinstance(audio, str) or not audio:
+        raise RuntimeError("Server response did not include audio_wav_base64.")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(base64.b64decode(audio))
+
+
+def _post_json(server_url: str, path: str, payload: dict[str, object | None]) -> dict[str, object]:
     body = json.dumps({k: v for k, v in payload.items() if v is not None}).encode("utf-8")
     request = urllib.request.Request(
-        f"{server_url.rstrip('/')}/chat",
+        f"{server_url.rstrip('/')}{path}",
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -45,18 +63,11 @@ def send_typed_turn(
         raise RuntimeError(f"Could not reach server at {server_url}: {exc}") from exc
 
 
-def write_audio(result: dict[str, object], output: Path) -> None:
-    audio = result.get("audio_wav_base64")
-    if not isinstance(audio, str) or not audio:
-        raise RuntimeError("Server response did not include audio_wav_base64.")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(base64.b64decode(audio))
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Send a typed prompt to a Rocky Relay server.")
-    parser.add_argument("text", nargs="?", help="Typed prompt.")
+    parser = argparse.ArgumentParser(description="Send an audio WAV to a Rocky Relay server.")
+    parser.add_argument("audio", type=Path, help="WAV file to send.")
     parser.add_argument("--server", default="http://127.0.0.1:8765", help="Server base URL.")
+    parser.add_argument("--stt", help="Override STT backend, e.g. smallest_ai or whisper_cpp.")
     parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
     parser.add_argument(
         "--tts",
@@ -75,11 +86,12 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="Print the server JSON without audio.")
     args = parser.parse_args()
 
-    text = args.text or input("Prompt: ").strip()
+    started = perf_counter()
     try:
-        result = send_typed_turn(
-            text,
+        result = send_audio_turn(
+            args.audio,
             args.server,
+            stt_backend=args.stt,
             llm_backend=args.llm,
             tts_backend=args.tts,
             persona=args.persona,
@@ -88,6 +100,7 @@ def main() -> None:
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
+    network_roundtrip_ms = round((perf_counter() - started) * 1000, 2)
 
     output = args.output
     temp_path: Path | None = None
@@ -102,11 +115,14 @@ def main() -> None:
 
     if args.json:
         printable = {k: v for k, v in result.items() if k != "audio_wav_base64"}
+        printable["client_timings_ms"] = {"network_roundtrip_ms": network_roundtrip_ms}
         print(json.dumps(printable, indent=2))
     else:
+        print(f"Transcript: {result.get('input_text')}")
         print(f"Reply: {result.get('reply_text')}")
         print(f"Spoken: {result.get('spoken_text')}")
         print(f"Timings: {result.get('timings_ms')}")
+        print(f"Network roundtrip: {network_roundtrip_ms}ms")
         if output is not None:
             print(f"WAV: {output}")
 

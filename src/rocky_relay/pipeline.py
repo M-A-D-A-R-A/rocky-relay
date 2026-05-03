@@ -31,6 +31,7 @@ class TurnResult:
     tts_backend: str
     llm_backend: str
     persona: str
+    conversation_id: str | None = None
     input_audio_path: str | None = None
     stt_backend: str | None = None
     stt_metadata: dict[str, object] | None = None
@@ -47,6 +48,8 @@ class TurnResult:
             "llm_backend": self.llm_backend,
             "persona": self.persona,
         }
+        if self.conversation_id is not None:
+            data["conversation_id"] = self.conversation_id
         if self.input_audio_path is not None:
             data["input_audio_path"] = self.input_audio_path
         if self.stt_backend is not None:
@@ -65,6 +68,8 @@ def run_typed_turn(
     llm_backend: str | None = None,
     tts_backend: str | None = None,
     persona: str | None = None,
+    conversation_id: str | None = None,
+    log_scope: str = "conversation",
 ) -> TurnResult:
     if not text.strip():
         raise ValueError("Input text is required.")
@@ -77,6 +82,8 @@ def run_typed_turn(
         llm_backend=llm_backend,
         tts_backend=tts_backend,
         persona=persona,
+        conversation_id=conversation_id,
+        log_scope=log_scope,
     )
 
 
@@ -84,10 +91,13 @@ def run_audio_turn(
     audio_path: str | Path,
     config: Config,
     *,
+    request_id: str | None = None,
     stt_backend: str | None = None,
     llm_backend: str | None = None,
     tts_backend: str | None = None,
     persona: str | None = None,
+    conversation_id: str | None = None,
+    log_scope: str = "conversation",
 ) -> TurnResult:
     resolved_audio_path = Path(audio_path)
     if not resolved_audio_path.is_absolute():
@@ -95,7 +105,7 @@ def run_audio_turn(
     if not resolved_audio_path.exists():
         raise FileNotFoundError(f"Audio file not found: {resolved_audio_path}")
 
-    request_id = uuid.uuid4().hex[:12]
+    request_id = request_id or uuid.uuid4().hex[:12]
     turn_start = perf_counter()
     timer = TurnTimer()
     selected_stt = stt_backend or config.stt_backend
@@ -115,6 +125,8 @@ def run_audio_turn(
         input_audio_path=str(resolved_audio_path),
         stt_backend=selected_stt,
         stt_metadata=stt_result.metadata,
+        conversation_id=conversation_id,
+        log_scope=log_scope,
     )
     return result
 
@@ -132,6 +144,8 @@ def _run_reply_turn(
     input_audio_path: str | None = None,
     stt_backend: str | None = None,
     stt_metadata: dict[str, object] | None = None,
+    conversation_id: str | None = None,
+    log_scope: str = "conversation",
 ) -> TurnResult:
     if timer is None:
         timer = TurnTimer()
@@ -175,18 +189,27 @@ def _run_reply_turn(
         tts_backend=selected_tts,
         llm_backend=selected_llm,
         persona=selected_persona,
+        conversation_id=conversation_id,
         input_audio_path=input_audio_path,
         stt_backend=stt_backend,
         stt_metadata=stt_metadata,
     )
-    _log_turn(config, result)
+    _log_turn(config, result, log_scope=log_scope)
     return result
 
 
-def _log_turn(config: Config, result: TurnResult) -> None:
+def _log_turn(config: Config, result: TurnResult, *, log_scope: str) -> None:
     record = result.as_dict(include_audio=False)
     record["created_at"] = datetime.now(timezone.utc).isoformat()
-    append_jsonl(config.resolve(config.log_dir) / "turns.jsonl", record)
+    append_jsonl(_log_dir_for_scope(config, log_scope) / "turns.jsonl", record)
+
+
+def _log_dir_for_scope(config: Config, log_scope: str) -> Path:
+    if log_scope == "conversation":
+        return config.resolve(config.conversation_log_dir)
+    if log_scope == "benchmark":
+        return config.resolve(config.benchmark_log_dir)
+    return config.resolve(config.log_dir)
 
 
 def main() -> None:
@@ -207,6 +230,7 @@ def main() -> None:
         "--persona",
         help="Override persona, e.g. none, rocky_basic, rocky_say, or rocky_say_llm.",
     )
+    parser.add_argument("--conversation-id", help="Optional conversation id to write into logs.")
     parser.add_argument("--json", action="store_true", help="Print the full JSON result.")
     args = parser.parse_args()
 
@@ -220,6 +244,7 @@ def main() -> None:
                 llm_backend=args.llm,
                 tts_backend=args.tts,
                 persona=args.persona,
+                conversation_id=args.conversation_id,
             )
         else:
             text = args.text or input("Prompt: ").strip()
@@ -229,6 +254,7 @@ def main() -> None:
                 llm_backend=args.llm,
                 tts_backend=args.tts,
                 persona=args.persona,
+                conversation_id=args.conversation_id,
             )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
