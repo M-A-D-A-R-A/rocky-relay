@@ -878,6 +878,57 @@ macOS may require Accessibility permission for global hotkeys:
 System Settings -> Privacy & Security -> Accessibility
 ```
 
+## Demo Without A Pi
+
+Until the Raspberry Pi is available, the Mac can simulate both roles:
+
+```text
+Terminal 1: server / brain
+  STT, Ollama, Rocky persona, TTS, logs
+
+Terminal 2: Pi simulator / device client
+  Option key, microphone capture, /audio request, local playback
+```
+
+Start the server:
+
+```bash
+rocky-relay-server
+```
+
+In another terminal, start the Mac client:
+
+```bash
+rocky-relay-mac-ptt \
+  --server http://127.0.0.1:8765 \
+  --device ":1" \
+  --stt smallest_ai \
+  --llm ollama \
+  --persona rocky_say_llm \
+  --tts smallest_ai
+```
+
+Optional quick health check:
+
+```bash
+curl http://127.0.0.1:8765/health
+```
+
+Suggested demo prompts:
+
+```text
+Rocky, what are we building today?
+I am reading Project Hail Mary. What should we test next?
+I don't like movies. What should I read instead?
+```
+
+Show the last two live turns:
+
+```bash
+tail -2 logs/conversations/recorded_turns.jsonl
+```
+
+
 Record once and benchmark both hosted and local STT on the same spoken prompt:
 
 If this command was installed before the benchmark package cleanup, refresh the
