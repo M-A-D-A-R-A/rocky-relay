@@ -35,6 +35,7 @@ class TurnResult:
     input_audio_path: str | None = None
     stt_backend: str | None = None
     stt_metadata: dict[str, object] | None = None
+    llm_metadata: dict[str, object] | None = None
 
     def as_dict(self, include_audio: bool = True) -> dict[str, object]:
         data: dict[str, object] = {
@@ -56,6 +57,8 @@ class TurnResult:
             data["stt_backend"] = self.stt_backend
         if self.stt_metadata is not None:
             data["stt_metadata"] = self.stt_metadata
+        if self.llm_metadata is not None:
+            data["llm_metadata"] = self.llm_metadata
         if include_audio:
             data["audio_wav_base64"] = self.audio_wav_base64
         return data
@@ -155,9 +158,14 @@ def _run_reply_turn(
     selected_llm = llm_backend or config.llm_backend
     selected_tts = tts_backend or config.tts_backend
     selected_persona = persona or config.persona
+    llm = build_llm(config, selected_llm, persona=selected_persona)
 
     with timer.measure("llm_full_response_ms"):
-        reply_text = build_llm(config, selected_llm, persona=selected_persona).reply(text)
+        reply_text = llm.reply(
+            text,
+            conversation_id=conversation_id,
+        )
+    llm_metadata = getattr(llm, "last_metadata", None)
 
     with timer.measure("persona_transform_ms"):
         spoken_text = apply_persona(
@@ -193,6 +201,7 @@ def _run_reply_turn(
         input_audio_path=input_audio_path,
         stt_backend=stt_backend,
         stt_metadata=stt_metadata,
+        llm_metadata=llm_metadata if isinstance(llm_metadata, dict) else None,
     )
     _log_turn(config, result, log_scope=log_scope)
     return result
@@ -218,7 +227,7 @@ def main() -> None:
     parser.add_argument("--audio", help="Audio file to transcribe before running the reply pipeline.")
     parser.add_argument("--config", help="Path to config.json.")
     parser.add_argument("--stt", help="Override STT backend, e.g. smallest_ai or whisper_cpp.")
-    parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
+    parser.add_argument("--llm", help="Override LLM backend, e.g. echo, ollama, or ollama_swiggy.")
     parser.add_argument(
         "--tts",
         help=(

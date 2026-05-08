@@ -20,6 +20,12 @@ export SMALLEST_API_KEY="..."
 
 Or copy `.env.example` to `.env` for local use. `.env` is ignored by git.
 
+## OAuth Tokens
+
+Swiggy MCP login stores local OAuth state in `.swiggy_tokens.json`. Treat this
+like a secret. It is ignored by git and should not be copied into docs,
+benchmarks, screenshots, or support requests.
+
 ## Pre-Commit Secret Check
 
 Before committing, run:

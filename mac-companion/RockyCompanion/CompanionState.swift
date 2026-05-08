@@ -11,11 +11,13 @@ final class CompanionState: ObservableObject {
     @Published var lastUserText: String?
     @Published var lastRockyText: String?
     @Published var lines: [ConversationLine] = []
+    @Published var suggestions: [RelaySuggestion] = []
     @Published var errorMessage: String?
     @Published var isJazzing: Bool = false
     @Published var direction: CGFloat = 1
 
     let relay = RelayClient()
+    private let conversationID = "swiggy-companion"
 
     func checkHealth() async {
         status = .thinking
@@ -37,38 +39,68 @@ final class CompanionState: ObservableObject {
         bubble = "rocky thinking"
         userBubble = nil
         rockyBubble = nil
+        suggestions = []
         do {
             let result = try await relay.sendAudio(
                 audioURL: audioURL,
                 serverURL: serverURL,
                 sttBackend: "smallest_ai",
-                llmBackend: "ollama",
+                llmBackend: "ollama_swiggy",
                 ttsBackend: "smallest_ai",
-                persona: "rocky_say_llm"
+                persona: "rocky_say_llm",
+                conversationID: conversationID
             )
-            lastUserText = result.inputText
-            lastRockyText = result.spokenText
-            lines = [
-                .init(speaker: "You", text: result.inputText),
-                .init(speaker: "Rocky", text: result.spokenText)
-            ]
-            userBubble = "You: \(result.inputText)"
-            rockyBubble = "Rocky: \(result.spokenText)"
-            if let audio = result.audioData {
-                status = .speaking
-                bubble = "rocky speaking"
-                try AudioPlayer.play(data: audio)
-            }
-            bubble = "rocky done!"
-            status = .idle
-            triggerJazz()
-            clearBubblesLater()
-            errorMessage = nil
+            try await apply(result: result)
         } catch {
             bubble = "bad bad bad"
             status = .error
             errorMessage = error.localizedDescription
         }
+    }
+
+    func selectSuggestion(_ suggestion: RelaySuggestion) async {
+        guard status == .idle else { return }
+        status = .thinking
+        bubble = "adding \(suggestion.number)"
+        userBubble = "You: \(suggestion.number)"
+        rockyBubble = nil
+        do {
+            let result = try await relay.sendText(
+                text: "add suggestion \(suggestion.number) to cart",
+                serverURL: serverURL,
+                llmBackend: "ollama_swiggy",
+                ttsBackend: "smallest_ai",
+                persona: "rocky_say_llm",
+                conversationID: conversationID
+            )
+            try await apply(result: result)
+        } catch {
+            bubble = "cart bad"
+            status = .error
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func apply(result: AudioTurnResponse) async throws {
+        lastUserText = result.inputText
+        lastRockyText = result.spokenText
+        lines = [
+            .init(speaker: "You", text: result.inputText),
+            .init(speaker: "Rocky", text: result.spokenText)
+        ]
+        userBubble = "You: \(result.inputText)"
+        rockyBubble = "Rocky: \(result.spokenText)"
+        suggestions = result.llmMetadata?.suggestions ?? []
+        if let audio = result.audioData {
+            status = .speaking
+            bubble = "rocky speaking"
+            try AudioPlayer.play(data: audio)
+        }
+        bubble = "rocky done!"
+        status = .idle
+        triggerJazz()
+        clearBubblesLater()
+        errorMessage = nil
     }
 
     func triggerJazz() {

@@ -8,6 +8,7 @@ venv/
 
 # Local runtime state
 config.json
+.swiggy_tokens.json
 logs/
 outputs/
 captures/

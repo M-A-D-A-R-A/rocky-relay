@@ -57,7 +57,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Send a typed prompt to a Rocky Relay server.")
     parser.add_argument("text", nargs="?", help="Typed prompt.")
     parser.add_argument("--server", default="http://127.0.0.1:8765", help="Server base URL.")
-    parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
+    parser.add_argument("--llm", help="Override LLM backend, e.g. echo, ollama, or ollama_swiggy.")
     parser.add_argument(
         "--tts",
         help=(

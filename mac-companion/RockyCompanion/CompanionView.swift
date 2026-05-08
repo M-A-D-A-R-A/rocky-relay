@@ -14,6 +14,7 @@ struct CompanionView: View {
 
             VStack(spacing: 8) {
                 bubbleStack
+                suggestionList
                 Button {
                     toggleRecording()
                 } label: {
@@ -37,7 +38,7 @@ struct CompanionView: View {
 
             keyboardShortcuts
         }
-        .frame(width: 360, height: 230)
+        .frame(width: 380, height: 420)
         .onReceive(animationTimer) { _ in
             tickSprite()
         }
@@ -82,7 +83,60 @@ struct CompanionView: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: state.rockyBubble)
     }
 
-    private func toggleRecording() {
+    @ViewBuilder
+    private var suggestionList: some View {
+        if !state.suggestions.isEmpty {
+            SuggestionList(
+                suggestions: state.suggestions,
+                isEnabled: state.status == .idle
+            ) { suggestion in
+                Task { await state.selectSuggestion(suggestion) }
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+}
+
+struct SuggestionList: View {
+    let suggestions: [RelaySuggestion]
+    let isEnabled: Bool
+    let onSelect: (RelaySuggestion) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 6) {
+                ForEach(suggestions) { suggestion in
+                    Button {
+                        onSelect(suggestion)
+                    } label: {
+                        SuggestionRow(suggestion: suggestion)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(suggestion.available == false || !isEnabled)
+                    .opacity(suggestion.available == false ? 0.48 : 1)
+                }
+            }
+            .padding(6)
+        }
+        .frame(width: 342)
+        .frame(maxHeight: 138)
+        .background(suggestionBackground)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: suggestions)
+    }
+
+    private var suggestionBackground: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color.black.opacity(0.7))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.green.opacity(0.35), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.22), radius: 5, x: 0, y: 2)
+    }
+}
+
+private extension CompanionView {
+    func toggleRecording() {
         if recorder.isRecording {
             guard let url = recorder.stop() else { return }
             state.status = .thinking
@@ -104,12 +158,49 @@ struct CompanionView: View {
         }
     }
 
-    private func tickSprite() {
+    func tickSprite() {
         if state.isJazzing {
             jazzFrame = (jazzFrame + 1) % 3
             return
         }
         walkFrame = (walkFrame + 1) % 2
+    }
+}
+
+struct SuggestionRow: View {
+    let suggestion: RelaySuggestion
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("\(suggestion.number)")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(.black)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.green.opacity(0.95)))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(suggestion.title)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                if !suggestion.displaySubtitle.isEmpty {
+                    Text(suggestion.displaySubtitle)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.68))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 4)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.08))
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

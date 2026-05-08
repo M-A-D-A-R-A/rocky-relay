@@ -14,7 +14,8 @@ struct RelayClient {
         sttBackend: String,
         llmBackend: String,
         ttsBackend: String,
-        persona: String
+        persona: String,
+        conversationID: String?
     ) async throws -> AudioTurnResponse {
         let url = try endpoint(serverURL: serverURL, path: "/audio")
         let audio = try Data(contentsOf: audioURL)
@@ -23,7 +24,34 @@ struct RelayClient {
             sttBackend: sttBackend,
             llmBackend: llmBackend,
             ttsBackend: ttsBackend,
-            persona: persona
+            persona: persona,
+            conversationID: conversationID
+        )
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(requestBody)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data)
+        return try JSONDecoder().decode(AudioTurnResponse.self, from: data)
+    }
+
+    func sendText(
+        text: String,
+        serverURL: String,
+        llmBackend: String,
+        ttsBackend: String,
+        persona: String,
+        conversationID: String?
+    ) async throws -> AudioTurnResponse {
+        let url = try endpoint(serverURL: serverURL, path: "/chat")
+        let requestBody = TextTurnRequest(
+            text: text,
+            llmBackend: llmBackend,
+            ttsBackend: ttsBackend,
+            persona: persona,
+            conversationID: conversationID
         )
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -62,6 +90,7 @@ struct AudioTurnRequest: Encodable {
     let llmBackend: String
     let ttsBackend: String
     let persona: String
+    let conversationID: String?
 
     enum CodingKeys: String, CodingKey {
         case audioWavBase64 = "audio_wav_base64"
@@ -69,6 +98,23 @@ struct AudioTurnRequest: Encodable {
         case llmBackend = "llm_backend"
         case ttsBackend = "tts_backend"
         case persona
+        case conversationID = "conversation_id"
+    }
+}
+
+struct TextTurnRequest: Encodable {
+    let text: String
+    let llmBackend: String
+    let ttsBackend: String
+    let persona: String
+    let conversationID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case llmBackend = "llm_backend"
+        case ttsBackend = "tts_backend"
+        case persona
+        case conversationID = "conversation_id"
     }
 }
 
@@ -76,6 +122,7 @@ struct AudioTurnResponse: Decodable {
     let inputText: String
     let spokenText: String
     let audioWavBase64: String?
+    let llmMetadata: RelayMetadata?
 
     var audioData: Data? {
         guard let audioWavBase64 else { return nil }
@@ -86,6 +133,25 @@ struct AudioTurnResponse: Decodable {
         case inputText = "input_text"
         case spokenText = "spoken_text"
         case audioWavBase64 = "audio_wav_base64"
+        case llmMetadata = "llm_metadata"
+    }
+}
+
+struct RelayMetadata: Decodable {
+    let suggestions: [RelaySuggestion]?
+}
+
+struct RelaySuggestion: Decodable, Identifiable, Equatable {
+    let number: Int
+    let title: String
+    let subtitle: String?
+    let price: String?
+    let available: Bool?
+
+    var id: Int { number }
+
+    var displaySubtitle: String {
+        subtitle?.isEmpty == false ? subtitle! : (available == false ? "Unavailable" : "")
     }
 }
 

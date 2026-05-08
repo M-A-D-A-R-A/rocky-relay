@@ -68,7 +68,7 @@ def main() -> None:
     parser.add_argument("audio", type=Path, help="WAV file to send.")
     parser.add_argument("--server", default="http://127.0.0.1:8765", help="Server base URL.")
     parser.add_argument("--stt", help="Override STT backend, e.g. smallest_ai or whisper_cpp.")
-    parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
+    parser.add_argument("--llm", help="Override LLM backend, e.g. echo, ollama, or ollama_swiggy.")
     parser.add_argument(
         "--tts",
         help=(

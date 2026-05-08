@@ -12,6 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 mac = ["pynput>=1.7"]
+swiggy = ["mcp>=1.0.0"]
 
 [project.scripts]
 rocky-relay-server = "rocky_relay.server.app:main"
@@ -27,6 +28,7 @@ rocky-relay-record-turn = "rocky_relay.mac_record:main"
 rocky-relay-interact = "rocky_relay.interaction:main"
 rocky-relay-mac-ptt = "rocky_relay.mac_ptt:main"
 rocky-relay-migrate-logs = "rocky_relay.log_migration:main"
+rocky-relay-swiggy-login = "rocky_relay.mcp.mcp_providers.swiggy.swiggy_client:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

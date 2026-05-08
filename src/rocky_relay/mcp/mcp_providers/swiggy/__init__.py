@@ -1,0 +1,1 @@
+"""Swiggy MCP provider."""

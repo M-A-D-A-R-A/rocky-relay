@@ -40,7 +40,7 @@ def main() -> None:
         help="Hold key: option, left_option, right_option, space, f1-f20, or a single character.",
     )
     parser.add_argument("--stt", help="Override STT backend, e.g. smallest_ai or whisper_cpp.")
-    parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
+    parser.add_argument("--llm", help="Override LLM backend, e.g. echo, ollama, or ollama_swiggy.")
     parser.add_argument(
         "--tts",
         help=(

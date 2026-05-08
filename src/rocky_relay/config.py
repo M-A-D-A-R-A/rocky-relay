@@ -30,6 +30,19 @@ class Config:
     llm_backend: str = "echo"
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.2:1b"
+    swiggy_ollama_model: str | None = None
+    swiggy_mcp_token_file: Path = Path(".swiggy_tokens.json")
+    swiggy_mcp_callback_host: str = "localhost"
+    swiggy_mcp_callback_port: int = 8767
+    swiggy_mcp_callback_path: str = "/callback"
+    swiggy_mcp_request_timeout_s: int = 30
+    swiggy_mcp_read_timeout_s: int = 300
+    swiggy_mcp_max_tool_rounds: int = 4
+    swiggy_mcp_history_turns: int = 8
+    geocoder_url: str = "https://nominatim.openstreetmap.org/search"
+    geocoder_user_agent: str = "rocky-relay/0.1 local-dev"
+    geocoder_countrycodes: str = "in"
+    geocoder_timeout_s: int = 5
     tts_backend: str = "silent"
     piper_bin: str = "piper"
     piper_model: Path = Path("models/piper/default.onnx")
@@ -99,6 +112,35 @@ def load_config(path: str | Path | None = None) -> Config:
         llm_backend=str(raw.get("llm_backend", Config.llm_backend)),
         ollama_url=str(raw.get("ollama_url", Config.ollama_url)),
         ollama_model=str(raw.get("ollama_model", Config.ollama_model)),
+        swiggy_ollama_model=_optional_config_str(raw.get("swiggy_ollama_model")),
+        swiggy_mcp_token_file=read_path("swiggy_mcp_token_file", ".swiggy_tokens.json"),
+        swiggy_mcp_callback_host=str(
+            raw.get("swiggy_mcp_callback_host", Config.swiggy_mcp_callback_host)
+        ),
+        swiggy_mcp_callback_port=int(
+            raw.get("swiggy_mcp_callback_port", Config.swiggy_mcp_callback_port)
+        ),
+        swiggy_mcp_callback_path=str(
+            raw.get("swiggy_mcp_callback_path", Config.swiggy_mcp_callback_path)
+        ),
+        swiggy_mcp_request_timeout_s=int(
+            raw.get("swiggy_mcp_request_timeout_s", Config.swiggy_mcp_request_timeout_s)
+        ),
+        swiggy_mcp_read_timeout_s=int(
+            raw.get("swiggy_mcp_read_timeout_s", Config.swiggy_mcp_read_timeout_s)
+        ),
+        swiggy_mcp_max_tool_rounds=int(
+            raw.get("swiggy_mcp_max_tool_rounds", Config.swiggy_mcp_max_tool_rounds)
+        ),
+        swiggy_mcp_history_turns=int(
+            raw.get("swiggy_mcp_history_turns", Config.swiggy_mcp_history_turns)
+        ),
+        geocoder_url=str(raw.get("geocoder_url", Config.geocoder_url)),
+        geocoder_user_agent=str(raw.get("geocoder_user_agent", Config.geocoder_user_agent)),
+        geocoder_countrycodes=str(
+            raw.get("geocoder_countrycodes", Config.geocoder_countrycodes)
+        ),
+        geocoder_timeout_s=int(raw.get("geocoder_timeout_s", Config.geocoder_timeout_s)),
         tts_backend=str(raw.get("tts_backend", Config.tts_backend)),
         piper_bin=str(raw.get("piper_bin", Config.piper_bin)),
         piper_model=read_path("piper_model", "models/piper/default.onnx"),
@@ -138,6 +180,13 @@ def _find_config_path(path: str | Path | None) -> Path | None:
         if default.exists():
             return default.resolve()
     return None
+
+
+def _optional_config_str(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _find_project_root() -> Path:

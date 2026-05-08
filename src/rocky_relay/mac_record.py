@@ -246,7 +246,7 @@ def main() -> None:
     parser.add_argument("--capture-output", type=Path, help="Where to write the captured mic WAV.")
     parser.add_argument("--record-only", action="store_true", help="Only record the mic WAV; skip STT/LLM/TTS.")
     parser.add_argument("--stt", help="Override STT backend, e.g. smallest_ai or whisper_cpp.")
-    parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
+    parser.add_argument("--llm", help="Override LLM backend, e.g. echo, ollama, or ollama_swiggy.")
     parser.add_argument(
         "--tts",
         help=(

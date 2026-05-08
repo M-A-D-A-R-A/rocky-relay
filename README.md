@@ -341,6 +341,12 @@ For macOS global push-to-talk, install the optional hotkey dependency:
 pip install -e ".[mac]"
 ```
 
+For Swiggy MCP tool support, install the optional MCP dependency:
+
+```bash
+pip install -e ".[swiggy]"
+```
+
 On this Mac, if `python3.12` is not the Python you want, pyenv 3.11 also works:
 
 ```bash
@@ -466,6 +472,47 @@ PYTHONPATH=src python3 -m rocky_relay.client.typed \
   --play
 ```
 
+## Swiggy MCP Mode
+
+Rocky can use Swiggy's MCP servers through the `ollama_swiggy` LLM backend.
+This keeps the existing STT -> LLM -> persona -> TTS flow, but the LLM can call
+Swiggy tools for food delivery, Instamart groceries, Dineout bookings, carts,
+orders, and saved addresses.
+
+Install the optional dependency and login once:
+
+```bash
+pip install -e ".[swiggy]"
+rocky-relay-swiggy-login
+```
+
+The login opens a browser and stores local OAuth state in `.swiggy_tokens.json`.
+That file is ignored by git. The default callback port is `8767` so it does not
+collide with the Rocky Relay server on `8765` or the alternate demo port `8766`.
+
+Run a typed Swiggy turn:
+
+```bash
+rocky-relay-turn \
+  "I want to order biryani" \
+  --llm ollama_swiggy \
+  --tts macos_say \
+  --persona rocky_say \
+  --conversation-id swiggy-demo
+```
+
+For a voice loop, use the same backend with a stable conversation id so Rocky
+remembers the selected address, restaurant, cart, and confirmation flow:
+
+```bash
+rocky-relay-interact \
+  --stt smallest_ai \
+  --llm ollama_swiggy \
+  --tts smallest_ai \
+  --persona rocky_say \
+  --conversation-id swiggy-demo
+```
+
 ## Config
 
 Copy the example config before using real backends:
@@ -481,6 +528,19 @@ Then edit:
   "llm_backend": "ollama",
   "ollama_url": "http://127.0.0.1:11434",
   "ollama_model": "llama3.2:1b",
+  "swiggy_ollama_model": "llama3.2:latest",
+  "swiggy_mcp_token_file": ".swiggy_tokens.json",
+  "swiggy_mcp_callback_host": "localhost",
+  "swiggy_mcp_callback_port": 8767,
+  "swiggy_mcp_callback_path": "/callback",
+  "swiggy_mcp_request_timeout_s": 30,
+  "swiggy_mcp_read_timeout_s": 300,
+  "swiggy_mcp_max_tool_rounds": 4,
+  "swiggy_mcp_history_turns": 8,
+  "geocoder_url": "https://nominatim.openstreetmap.org/search",
+  "geocoder_user_agent": "rocky-relay/0.1 local-dev",
+  "geocoder_countrycodes": "in",
+  "geocoder_timeout_s": 5,
   "capture_dir": "captures",
   "ffmpeg_bin": "ffmpeg",
   "mac_audio_device": ":1",
@@ -497,8 +557,8 @@ Then edit:
 }
 ```
 
-`config.json`, `logs/`, `outputs/`, and `models/` are intentionally ignored by
-git.
+`config.json`, `.swiggy_tokens.json`, `logs/`, `outputs/`, and `models/` are
+intentionally ignored by git.
 
 ## Backend Modes
 
@@ -506,6 +566,7 @@ LLM backends:
 
 - `echo`: no-dependency test backend.
 - `ollama`: local Ollama HTTP backend.
+- `ollama_swiggy`: Ollama chat backend with Swiggy MCP tool calls.
 
 STT backends:
 

@@ -83,7 +83,7 @@ def main() -> None:
     parser.add_argument("--sample-rate", type=int, help="Recorded WAV sample rate.")
     parser.add_argument("--channels", type=int, help="Recorded WAV channel count.")
     parser.add_argument("--stt", help="Override STT backend, e.g. smallest_ai or whisper_cpp.")
-    parser.add_argument("--llm", help="Override LLM backend, e.g. echo or ollama.")
+    parser.add_argument("--llm", help="Override LLM backend, e.g. echo, ollama, or ollama_swiggy.")
     parser.add_argument(
         "--tts",
         help=(

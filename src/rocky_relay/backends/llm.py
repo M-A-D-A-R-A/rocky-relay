@@ -6,10 +6,16 @@ import urllib.error
 import urllib.request
 
 from rocky_relay.config import Config
+from rocky_relay.mcp.mcp_setup.mcp_agent import MCPAgentLLM
+from rocky_relay.mcp.mcp_providers.swiggy.swiggy_agent import (
+    SWIGGY_REDIRECT,
+    SWIGGY_SAFE_REFUSAL,
+    SwiggyProvider,
+)
 
 
 class LLMBackend:
-    def reply(self, text: str) -> str:
+    def reply(self, text: str, *, conversation_id: str | None = None) -> str:
         raise NotImplementedError
 
 
@@ -17,7 +23,7 @@ class LLMBackend:
 class EchoLLM(LLMBackend):
     max_reply_sentences: int = 2
 
-    def reply(self, text: str) -> str:
+    def reply(self, text: str, *, conversation_id: str | None = None) -> str:
         return f"You said: {text.strip()}"
 
 
@@ -29,7 +35,7 @@ class OllamaLLM(LLMBackend):
     persona: str = "none"
     timeout_s: int = 120
 
-    def reply(self, text: str) -> str:
+    def reply(self, text: str, *, conversation_id: str | None = None) -> str:
         prompt = self._prompt(text)
         payload = json.dumps(
             {
@@ -90,6 +96,28 @@ class OllamaLLM(LLMBackend):
         return {"num_predict": 80, "temperature": 0.5}
 
 
+class OllamaSwiggyLLM(MCPAgentLLM, LLMBackend):
+    def __init__(
+        self,
+        *,
+        config: Config,
+        base_url: str,
+        model: str,
+        max_reply_sentences: int = 2,
+        persona: str = "none",
+        timeout_s: int = 180,
+    ):
+        super().__init__(
+            provider=SwiggyProvider(config),
+            config=config,
+            base_url=base_url,
+            model=model,
+            max_reply_sentences=max_reply_sentences,
+            persona=persona,
+            timeout_s=timeout_s,
+        )
+
+
 def build_llm(
     config: Config,
     override: str | None = None,
@@ -103,6 +131,14 @@ def build_llm(
         return OllamaLLM(
             base_url=config.ollama_url,
             model=config.ollama_model,
+            max_reply_sentences=config.max_reply_sentences,
+            persona=persona,
+        )
+    if name in {"ollama_swiggy", "swiggy_ollama"}:
+        return OllamaSwiggyLLM(
+            config=config,
+            base_url=config.ollama_url,
+            model=config.swiggy_ollama_model or config.ollama_model,
             max_reply_sentences=config.max_reply_sentences,
             persona=persona,
         )
